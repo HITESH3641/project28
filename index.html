@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Body & Bloom Atlas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #ffffff;
+            color: #1a1a1a;
+        }
+        h1, h2, h3 {
+            font-family: 'Playfair Display', serif;
+        }
+        .view {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .view.hidden {
+            opacity: 0;
+            transform: scale(0.98);
+            pointer-events: none;
+            position: absolute;
+        }
+        .body-part {
+            position: absolute;
+            background-color: rgba(135, 166, 150, 0.4);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .body-part:hover {
+            background-color: rgba(67, 107, 87, 0.7);
+            transform: scale(1.1);
+        }
+        #tooltip {
+            position: fixed;
+            background-color: #1a1a1a;
+            color: #e3f2fd;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: 'Playfair Display', serif;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 100;
+        }
+        #garden-canvas-container {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #plant-hover-card {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 50;
+        }
+        #plant-hover-card.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <main id="app-container" class="w-full min-h-screen">
+        
+        <section id="welcome-page" class="view w-full min-h-screen flex flex-col items-center justify-center p-4 text-center">
+            <div class="max-w-4xl">
+                <h1 class="text-5xl md:text-7xl font-bold text-emerald-900 mb-4">The Virtual Herbal Garden</h1>
+                <p class="text-xl md:text-2xl text-gray-700">A project from the All India Institute of Ayurveda (AIIA)</p>
+                <p class="mt-8 text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">Discover the power of traditional healing practices. This immersive atlas combines technology with ancient knowledge, allowing you to explore the diverse medicinal plants of AYUSH right from your home.</p>
+                <button id="start-button" class="mt-12 bg-emerald-700 text-white py-3 px-8 rounded-full text-lg font-semibold shadow-lg hover:bg-emerald-600 transition-colors duration-300 transform hover:scale-105">
+                    Explore the Garden
+                </button>
+            </div>
+        </section>
+
+        <section id="atlas-view" class="view hidden w-full min-h-screen flex-col items-center justify-center p-4">
+            <div class="text-center mb-8 max-w-2xl">
+                <h1 class="text-4xl md:text-6xl font-bold text-emerald-900">Body & Bloom Atlas</h1>
+                <p class="mt-4 text-lg text-gray-600">Explore the healing gardens within. Hover over a region of the body to discover the plants that support its well-being, then click to enter its garden.</p>
+            </div>
+            <div class="relative w-[200px] h-[500px] md:w-[250px] md:h-[600px]">
+                <div class="absolute w-full h-full bg-slate-100/50 rounded-[100px] top-0 left-0"></div>
+                <div data-garden="mind" title="The Mind & Mood Garden" class="body-part w-24 h-24 md:w-28 md:h-28 top-[2%] left-1/2 -translate-x-1/2"></div>
+                <div data-garden="respiratory" title="The Respiratory Garden" class="body-part w-32 h-20 md:w-40 md:h-24 top-[22%] left-1/2 -translate-x-1/2 rounded-3xl"></div>
+                <div data-garden="circulatory" title="The Circulatory Garden" class="body-part w-16 h-16 md:w-20 md:h-20 top-[24%] left-1/2 -translate-x-1/2"></div>
+                <div data-garden="digestive" title="The Digestive Garden" class="body-part w-28 h-20 md:w-36 md:h-24 top-[40%] left-1/2 -translate-x-1/2 rounded-2xl"></div>
+                <div data-garden="firstaid" title="The First-Aid Garden" class="body-part w-40 h-32 md:w-52 md:h-40 top-[60%] left-1/2 -translate-x-1/2 rounded-3xl"></div>
+            </div>
+        </section>
+
+        <section id="garden-view" class="view hidden w-full min-h-screen flex-col p-4 md:p-8">
+            <div class="w-full max-w-7xl mx-auto">
+                <div class="flex flex-row justify-between items-center mb-6">
+                    <button id="back-to-atlas" class="bg-emerald-700 text-white py-2 px-5 rounded-lg hover:bg-emerald-600 transition-colors duration-300 shadow-md">
+                        &larr; Back to Atlas
+                    </button>
+                    <div class="flex space-x-2">
+                        <button id="zoom-in" class="bg-emerald-700 text-white py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors duration-300 shadow-md">Zoom In</button>
+                        <button id="zoom-out" disabled class="bg-emerald-700 text-white py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">Zoom Out</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 w-full">
+                    <div id="garden-canvas-container" class="lg:col-span-3 bg-slate-100 rounded-2xl shadow-inner overflow-hidden">
+                        <div id="plant-hover-card" class="flex flex-col items-center">
+                            <img id="plant-hover-image" class="w-24 h-24 rounded-full border-2 border-white mb-2" alt="Herb Image">
+                            <h4 id="plant-hover-name" class="text-lg font-semibold text-slate-800"></h4>
+                        </div>
+                    </div>
+                    <div id="info-panel" class="lg:col-span-2 bg-white/50 p-6 rounded-2xl shadow-lg flex flex-col justify-center min-h-[400px]">
+                        <div id="panel-content" class="transition-opacity duration-500">
+                             <h2 id="garden-name" class="text-3xl md:text-4xl font-bold text-emerald-900 mb-2"></h2>
+                             <p id="garden-description" class="text-slate-700 mb-6"></p>
+                             <div id="plant-details" class="opacity-0 transition-opacity duration-500">
+                                 <img id="plant-info-image" class="w-28 h-28 rounded-full object-cover mx-auto mb-4 border-2 border-emerald-500 shadow-md" alt="Image of selected herb">
+                                 <h3 id="plant-name" class="text-2xl md:text-3xl font-bold text-emerald-800 text-center"></h3>
+                                 <p class="text-lg text-emerald-700 font-semibold mt-2 text-center" id="plant-use"></p>
+                                 <p class="mt-4 text-slate-700" id="plant-description"></p>
+                                 <div class="mt-6 p-4 bg-emerald-50 rounded-lg border-l-4 border-emerald-500">
+                                     <h4 class="font-bold text-emerald-900">How to Use</h4>
+                                     <p class="text-emerald-800" id="plant-howto"></p>
+                                 </div>
+                                 <button id="explore-more-button" class="mt-8 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-500 transition-colors duration-300">
+                                     Explore More
+                                 </button>
+                                 <div id="more-details-container" class="mt-4 hidden">
+                                     <div id="more-benefits" class="mb-4">
+                                        <h4 class="font-bold text-lg text-emerald-900 mb-2">Additional Health Benefits</h4>
+                                        <ul class="list-disc list-inside text-gray-700 space-y-1"></ul>
+                                     </div>
+                                     <div id="plant-recipe">
+                                        <h4 class="font-bold text-lg text-emerald-900 mb-2">Simple Recipe</h4>
+                                        <p class="text-gray-700"></p>
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    
+    <div id="tooltip"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const atlasData = {
+                digestive: {
+                    name: "The Digestive Garden",
+                    description: "This garden is dedicated to plants that help with stomachaches, bloating, and overall digestive health. Explore these natural remedies to calm an upset tummy.",
+                    image: "https://placehold.co/150x150/81c784/ffffff?text=Digestive+System",
+                    plants: {
+                        mint: { name: "Mint", use: "Soothes an Upset Stomach", description: "Mint contains menthol, which can help relax the muscles of the digestive tract, relieving spasms, gas, and nausea. It also has a calming effect, which can reduce stress-related indigestion. Traditionally used to freshen breath and aid digestion after meals.", howto: "Best as a tea to help after meals. Steep fresh or dried leaves in hot water for 5-10 minutes. Can also be used to infuse water or as an essential oil in aromatherapy to ease nausea.", color: 0x4ade80, model: 'leafy-stem', url: "https://placehold.co/200x200/4ade80/ffffff?text=Mint", moreBenefitsAndRecipe: {benefits: ["Relieves Headaches: The menthol in mint oil can help relax muscles and ease tension headaches when applied topically.", "Freshens Breath: Mint's strong, pleasant aroma helps to neutralize bad breath instantly.", "Improves Mental Alertness: The scent of mint has been shown to improve memory and focus.", "Calms Skin Irritation: Mint leaves have a cooling, soothing effect on skin irritations and insect bites."], recipe: {name: "Refreshing Mint Tea", instructions: "Crush a handful of fresh mint leaves. Add them to a teapot and pour in hot water. Let it steep for 5-7 minutes. Strain and enjoy. A slice of lemon or a bit of honey can be added for extra flavor."}}},
+                        ginger: { name: "Ginger", use: "Eases Nausea and Aids Digestion", description: "A powerful anti-inflammatory, ginger is famous for its ability to quell nausea from motion sickness or morning sickness and stimulate digestive juices. It contains gingerols and shogaols, which help to relax intestinal muscles and reduce cramping. It also helps to increase gastric motility, ensuring food passes through the system smoothly.", howto: "Grate fresh ginger into tea, or chew on a small piece of candied ginger. For motion sickness, take capsules or chew a small piece before travel. Ginger ale made from real ginger can also be helpful.", color: 0xfacc15, model: 'rhizome', url: "https://placehold.co/200x200/facc15/ffffff?text=Ginger", moreBenefitsAndRecipe: {benefits: ["Reduces Inflammation: Ginger's anti-inflammatory properties can help reduce pain and swelling in arthritis and other inflammatory conditions.", "Soothes Sore Muscles: Applying ginger compresses or balms can help relieve muscle aches after exercise.", "Aids in Weight Management: Ginger may help with weight loss by increasing metabolism and promoting a feeling of fullness.", "Boosts Immunity: Its antimicrobial properties can help the body fight off infections."], recipe: {name: "Immune-Boosting Ginger Tea", instructions: "Peel and thinly slice a 2-inch piece of fresh ginger. Place slices in a pot with 4 cups of water and bring to a boil. Reduce heat and simmer for 20 minutes. Strain and serve with lemon and honey to taste."}}},
+                        chamomile: { name: "Chamomile", use: "Calms Intestinal Cramps", description: "Known for its gentle, relaxing properties, chamomile helps to soothe muscle spasms in the stomach and intestines, making it ideal for indigestion and cramping. Its sedative properties can calm the nervous system, which is often linked to digestive upset. It also has mild anti-inflammatory effects that can reduce gut irritation.", howto: "Brew dried chamomile flowers into a calming tea, best enjoyed before bedtime. Can be combined with other herbs like mint or fennel for enhanced digestive support.", color: 0xfef08a, model: 'flower-stem', url: "https://placehold.co/200x200/fef08a/ffffff?text=Chamomile", moreBenefitsAndRecipe: {benefits: ["Promotes Sleep: Chamomile's calming properties make it a popular natural remedy for insomnia and restlessness.", "Reduces Anxiety: Drinking chamomile tea can help reduce anxiety and promote a sense of well-being.", "Soothes Skin: A cooled chamomile tea can be used as a compress or wash to soothe skin irritations and rashes.", "Relieves Hay Fever: Its anti-inflammatory properties can help relieve symptoms of hay fever and other allergies."], recipe: {name: "Calming Chamomile-Lavender Tea", instructions: "Add 1 tablespoon of dried chamomile flowers and 1 teaspoon of dried lavender buds to a tea infuser. Place in a mug and fill with hot water. Steep for 5-10 minutes. Sweeten with honey if desired."}}},
+                        fennel: { name: "Fennel", use: "Relieves Gas and Bloating", description: "Fennel seeds are a natural carminative, meaning they help to expel gas from the intestines, providing relief from bloating and cramping. The seeds contain anethole, which has antispasmodic effects that relax the smooth muscles of the digestive tract. It's often used to soothe colic in infants.", howto: "Chew a small amount of fennel seeds after a meal or brew them as a tea. The bulb can also be roasted or added to salads and soups for digestive benefit.", color: 0xa9c381, model: 'tall-stem', url: "https://placehold.co/200x200/a9c381/ffffff?text=Fennel", moreBenefitsAndRecipe: {benefits: ["Freshens Breath: Chewing fennel seeds is a traditional way to freshen breath naturally.", "Reduces Menstrual Cramps: The antispasmodic properties of fennel can help alleviate period pain.", "Boosts Eye Health: Fennel contains antioxidants that are beneficial for eye health.", "Aids Lactation: It is traditionally used to promote milk production in nursing mothers."], recipe: {name: "Fennel & Cucumber Salad", instructions: "Thinly slice a fresh fennel bulb and half a cucumber. In a bowl, toss with a light vinaigrette made from olive oil, lemon juice, salt, and pepper. Garnish with fresh mint and dill."}}},
+                        anise: { name: "Anise", use: "Aids Digestion", description: "Similar to fennel, anise is used to improve digestion, relieve gas, and soothe an upset stomach. Its active compound, anethole, gives it a licorice-like flavor and is responsible for its carminative and antispasmodic effects. It can help reduce flatulence and indigestion after rich meals.", howto: "Add anise seeds to baked goods or infuse in hot water for a soothing tea. It can also be used as a mouth freshener.", color: 0x81c784, model: 'tall-stem', url: "https://placehold.co/200x200/81c784/ffffff?text=Anise", moreBenefitsAndRecipe: {benefits: ["Relieves Coughs: Anise is a gentle expectorant that can help loosen phlegm and soothe a cough.", "Antimicrobial: It contains compounds that can inhibit the growth of bacteria and fungi.", "Aids in Lactation: Traditionally used to increase milk flow in nursing mothers.", "Menstrual Pain Relief: Its anti-inflammatory properties can help reduce menstrual cramps."], recipe: {name: "Anise Infusion", instructions: "Add 1 teaspoon of whole anise seeds to a cup. Pour hot water over the seeds and let steep for 10-15 minutes. Strain and drink. Can be sweetened with honey."}}},
+                        dandelion: { name: "Dandelion", use: "Supports Liver and Digestion", description: "Dandelion root and leaves stimulate bile production, aiding in the digestion of fats and supporting liver health. It acts as a gentle diuretic, helping to flush toxins from the body. The root is a prebiotic, feeding healthy gut bacteria and promoting a balanced microbiome.", howto: "The roasted root can be brewed as a coffee substitute, or the leaves can be added to salads.", color: 0xfcc419, model: 'leafy-ground', url: "https://placehold.co/200x200/fcc419/ffffff?text=Dandelion", moreBenefitsAndRecipe: {benefits: ["Diuretic Properties: Dandelion leaves act as a gentle diuretic, helping to reduce water retention and bloating.", "Rich in Vitamins: Dandelion greens are a good source of vitamins A, C, and K.", "Aids Kidney Health: It helps flush waste from the kidneys and promotes proper kidney function.", "Bone Health: Its high vitamin K content is important for bone density and strength."], recipe: {name: "Dandelion Root 'Coffee'", instructions: "Roast dandelion roots in an oven at 300°F (150°C) until dark brown. Grind the roasted roots and brew in a coffee maker or French press like you would coffee grounds."}}},
+                        turmeric: { name: "Turmeric", use: "Reduces Intestinal Inflammation", description: "The active compound in turmeric, curcumin, has powerful anti-inflammatory properties that can soothe the gut lining. It's a potent antioxidant that protects the digestive system from oxidative stress and helps regulate the gut microbiome. It's often used in Ayurvedic medicine to support healthy digestion and gut immunity.", howto: "Used as a spice in cooking. For medicinal use, a golden milk latte with black pepper is popular, as black pepper significantly enhances curcumin absorption. Can also be taken in capsules.", color: 0xffd54f, model: 'rhizome', url: "https://placehold.co/200x200/ffd54f/ffffff?text=Turmeric", moreBenefitsAndRecipe: {benefits: ["Pain Relief: Curcumin can act as a natural pain reliever for joint pain and arthritis.", "Boosts Brain Health: Its anti-inflammatory effects may help protect against neurodegenerative diseases.", "Improves Skin Health: Topically, it can be used to reduce skin inflammation, acne, and signs of aging.", "Anticancer Properties: Research suggests that curcumin may help inhibit the growth of certain cancer cells."], recipe: {name: "Golden Milk (Turmeric Latte)", instructions: "In a small pot, whisk together 1 cup of milk (dairy or plant-based), 1 teaspoon of turmeric powder, ½ teaspoon of cinnamon, a pinch of ginger, and a pinch of black pepper. Heat until warm and frothy. Sweeten with honey or maple syrup."}}},
+                        slipperyelm: { name: "Slippery Elm", use: "Soothes Gut Lining", description: "Slippery elm bark forms a protective, mucilaginous coating in the digestive tract, which can soothe irritation from conditions like acid reflux and IBS. It provides a protective barrier, reducing inflammation and helping to heal inflamed tissues. It's also a demulcent, offering relief for sore throats and coughs.", howto: "Mix the powdered bark with water to form a gruel. Drink it slowly. Can also be found in lozenges for throat relief.", color: 0x8d6e63, model: 'bark', url: "https://placehold.co/200x200/8d6e63/ffffff?text=Slippery+Elm", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Throats: Its demulcent properties coat the throat, providing relief from pain and irritation.", "Treats Coughs: It can help calm a dry cough by soothing inflamed mucous membranes.", "Relieves Heartburn: The mucilage helps to coat and protect the esophagus from stomach acid.", "Supports Urinary Tract Health: It has a soothing effect on the urinary tract and can help with inflammation."], recipe: {name: "Slippery Elm Gruel", instructions: "Whisk 1 tablespoon of slippery elm powder into 1 cup of cold water until smooth. Heat the mixture gently over low heat, stirring constantly, until it thickens into a gruel-like consistency. Drink warm."}}},
+                        marshmallow: { name: "Marshmallow Root", use: "Coats and Protects the Gut", description: "Like slippery elm, marshmallow root contains mucilage that provides a protective barrier against irritation, calming the digestive system. This soothing effect can reduce inflammation and discomfort from conditions such as gastritis, stomach ulcers, and colitis. It also helps to alleviate constipation.", howto: "Soak the dried root in cold water overnight to create a soothing liquid. This 'cold infusion' is effective for irritated gut linings and can also be used as a gargle for sore throats.", color: 0xd3b8ae, model: 'root', url: "https://placehold.co/200x200/d3b8ae/ffffff?text=Marshmallow+Root", moreBenefitsAndRecipe: {benefits: ["Soothes Urinary Tract: Its demulcent properties can relieve inflammation and irritation in the urinary tract.", "Treats Respiratory Ailments: Marshmallow root can calm dry, irritated coughs and sore throats.", "Relieves Sunburn: A cooled infusion can be applied topically to soothe sunburns and minor skin irritations.", "Boosts Immunity: It can help modulate the immune system and has mild antimicrobial effects."], recipe: {name: "Marshmallow Root Cold Infusion", instructions: "Place 2-3 tablespoons of dried marshmallow root in a glass jar. Add 4 cups of cold water and stir well. Cover and let sit overnight (8 hours). Strain and sip the liquid throughout the day."}}},
+                        licorice: { name: "Licorice Root", use: "Heals and Protects Stomach Lining", description: "Licorice root can help heal and prevent ulcers by increasing blood flow to the stomach lining and protecting it from damage. Its anti-inflammatory compounds can soothe an irritated gut. It also helps in maintaining the health of the adrenal glands, which is important for managing stress that can affect digestion.", howto: "Can be brewed as a tea, often mixed with other herbs. Avoid long-term use as it can raise blood pressure in some individuals.", color: 0x6e4e37, model: 'root', url: "https://placehold.co/200x200/6e4e37/ffffff?text=Licorice+Root", moreBenefitsAndRecipe: {benefits: ["Adrenal Support: Licorice root is an adaptogen that helps support the adrenal glands during times of stress.", "Soothes Sore Throats: Its demulcent properties make it a classic remedy for coughs and sore throats.", "Antiviral: It has compounds that can help fight viral infections, including those that cause respiratory illness.", "Boosts Respiratory Health: It acts as an expectorant to help clear phlegm and has a soothing effect on airways."], recipe: {name: "Licorice Root Tea", instructions: "Add 1 teaspoon of dried licorice root to 1 cup of water in a small saucepan. Bring to a boil and then simmer for 15 minutes. Strain and serve warm. Can be combined with ginger and cinnamon."}}},
+                        caraway: { name: "Caraway", use: "Relieves Indigestion", description: "Caraway seeds help to relax the smooth muscle tissue of the digestive tract, which can alleviate cramps, gas, and indigestion. They are known for their ability to soothe flatulence and calm a gassy stomach. The seeds also have a mild antimicrobial effect.", howto: "Chew a spoonful of seeds after a meal or add them to baked goods and soups. A tea can be made by steeping crushed seeds in hot water.", color: 0x9e8c67, model: 'seed-cluster', url: "https://placehold.co/200x200/9e8c67/ffffff?text=Caraway", moreBenefitsAndRecipe: {benefits: ["Reduces Menstrual Pain: Caraway's antispasmodic properties can help alleviate menstrual cramps.", "Respiratory Relief: It has mild expectorant properties that can help with coughs.", "Boosts Metabolism: The seeds can stimulate the metabolism and promote a healthy appetite.", "Antibacterial: Caraway oil has been shown to have antibacterial effects against certain strains."], recipe: {name: "Caraway Seed Tea", instructions: "Crush 1 tablespoon of caraway seeds lightly. Add to a mug and pour over hot water. Let it steep for 10-15 minutes. Strain and drink after a heavy meal."}}},
+                        cardamom: { name: "Cardamom", use: "Stimulates Digestion", description: "Cardamom pods are a fragrant spice known to stimulate the appetite and digestive process, helping to break down food more effectively. It is a carminative, so it helps to relieve gas and bloating. Its aromatic properties can also reduce nausea and motion sickness.", howto: "Use in curries, teas, and desserts. Chewing a pod can freshen breath and aid digestion after a meal. Cardamom is a key ingredient in many traditional spice blends for digestion.", color: 0x76b47c, model: 'pod-cluster', url: "https://placehold.co/200x200/76b47c/ffffff?text=Cardamom", moreBenefitsAndRecipe: {benefits: ["Relieves Halitosis: Chewing on a cardamom pod is a traditional remedy for bad breath.", "Supports Oral Health: Its antimicrobial properties help fight bacteria in the mouth.", "Detoxification: It can act as a diuretic, helping to flush toxins from the body.", "Respiratory Support: Inhaling the aroma can help clear congestion."], recipe: {name: "Cardamom-Infused Rice", instructions: "Heat 1 tablespoon of butter or oil in a pan. Add 2-3 cardamom pods, 1 cup of basmati rice, and a pinch of salt. Sauté for a minute, then add 2 cups of water. Bring to a boil, cover, reduce heat, and simmer for 15 minutes. Fluff with a fork and serve."}}},
+                        clove: { name: "Clove", use: "Anti-inflammatory for the Gut", description: "Clove contains eugenol, a compound with powerful anti-inflammatory and antiseptic properties that can soothe gut inflammation. It is also a natural anesthetic, which can help to reduce pain in the digestive tract. It is often used in traditional medicine to relieve stomach pain and gas.", howto: "A single clove can be chewed to aid digestion. Also used as a spice in cooking. For a strong effect, a few drops of clove oil can be diluted in water.", color: 0x8b0000, model: 'bud', url: "https://placehold.co/200x200/8b0000/ffffff?text=Clove", moreBenefitsAndRecipe: {benefits: ["Pain Relief: Clove oil is a traditional remedy for toothache due to its numbing properties.", "Antiseptic: Its strong antiseptic action makes it useful for cleaning minor cuts and scrapes.", "Blood Sugar Control: Some studies suggest that clove may help manage blood sugar levels.", "Antifungal: It can be used topically to treat fungal infections like athlete's foot."], recipe: {name: "Warming Clove Tea", instructions: "Add 3-4 whole cloves to a cup of hot water. Let it steep for 10 minutes. The tea is strong and warming, perfect for easing stomach discomfort or a sore throat."}}},
+                        cinnamon: { name: "Cinnamon", use: "Helps with Bloating", description: "Cinnamon bark can help reduce gas and bloating by improving blood flow to the digestive system and relaxing muscles. It also has antimicrobial properties that can help balance gut flora. Cinnamon is well-known for its ability to help regulate blood sugar, which can indirectly support digestive health.", howto: "Sprinkle on food or brew a cinnamon stick in hot water for a warming digestive aid. Can be used in sweet and savory dishes.", color: 0xcd7f32, model: 'bark-roll', url: "https://placehold.co/200x200/cd7f32/ffffff?text=Cinnamon", moreBenefitsAndRecipe: {benefits: ["Blood Sugar Control: Cinnamon is famous for its ability to help regulate blood glucose levels.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Anti-inflammatory: It can help reduce inflammation throughout the body.", "Pain Relief: Cinnamon can help relieve menstrual cramps and muscle aches."], recipe: {name: "Cinnamon Spice Smoothie", instructions: "Blend 1 frozen banana, 1 cup of milk (dairy or plant-based), ½ teaspoon of cinnamon, and a pinch of nutmeg. Add a teaspoon of honey if desired. Blend until smooth and creamy."}}},
+                        cumin: { name: "Cumin", use: "Boosts Digestion", description: "Cumin seeds stimulate the release of bile and other digestive enzymes, helping the body process food more efficiently and preventing indigestion. It is a powerful carminative that relieves gas and bloating. It has been used for centuries in traditional Indian medicine to support digestive function.", howto: "Toast the seeds and add to dishes or brew a tea. Cumin water is a popular remedy for indigestion and flatulence.", color: 0xb57c1e, model: 'seed-cluster', url: "https://placehold.co/200x200/b57c1e/ffffff?text=Cumin", moreBenefitsAndRecipe: {benefits: ["Rich in Iron: Cumin is an excellent source of iron, important for energy and blood health.", "Aids in Weight Loss: Some studies suggest it can help boost metabolism and reduce body fat.", "Immune Support: Its antimicrobial properties help fight off bacteria and strengthen immunity.", "Antioxidant: It is a rich source of antioxidants that protect the body from damage."], recipe: {name: "Cumin Water (Jal Jeera)", instructions: "Toast 1 teaspoon of cumin seeds in a dry pan until fragrant. Add to a glass of warm water. Let it sit for 10-15 minutes. Strain and drink."}}},
+                        bayleaf: { name: "Bay Leaf", use: "Relieves Stomach Ulcers", description: "Compounds in bay leaves can help soothe the digestive tract and may even offer protection against stomach ulcers. It contains unique enzymes that can aid in breaking down proteins, making it a great addition to stews and roasts to improve digestibility. It has a calming effect on the stomach.", howto: "Add a leaf to soups or stews for flavor, removing before serving. Do not eat the leaves directly.", color: 0x6a815a, model: 'leaf-cluster', url: "https://placehold.co/200x200/6a815a/ffffff?text=Bay+Leaf", moreBenefitsAndRecipe: {benefits: ["Respiratory Health: Inhaling the steam from boiled bay leaves can help clear congestion.", "Antifungal: It has properties that can help fight fungal infections.", "Reduces Inflammation: Its anti-inflammatory effects can help with pain and swelling.", "Stress Relief: The aroma of bay leaf is calming and can help reduce anxiety."], recipe: {name: "Bay Leaf Infused Broth", instructions: "Add 2-3 bay leaves to your favorite vegetable or chicken broth while simmering. The broth will absorb the beneficial compounds. Remove leaves before serving."}}},
+                        rosemary: { name: "Rosemary", use: "Reduces Indigestion", description: "Rosemary contains powerful antioxidants and anti-inflammatory compounds that can relax the smooth muscles of the digestive tract. Its aromatic compounds can stimulate bile production and improve digestion. It is particularly useful for indigestion after fatty meals.", howto: "Use as a culinary herb in roasts and stews, or brew as a tea to relieve indigestion. A few drops of rosemary oil can also be diffused to calm the stomach.", color: 0x5a7a58, model: 'bushy', url: "https://placehold.co/200x200/5a7a58/ffffff?text=Rosemary", moreBenefitsAndRecipe: {benefits: ["Improves Memory: The scent and compounds in rosemary are known to boost memory and concentration.", "Antioxidant Power: It is rich in antioxidants that protect the body from free radical damage.", "Stimulates Hair Growth: Rosemary oil is a popular remedy for stimulating blood flow to the scalp and promoting hair growth.", "Pain Relief: Applying rosemary oil topically can help relieve muscle aches and joint pain."], recipe: {name: "Rosemary Lemonade", instructions: "In a saucepan, combine 1 cup of sugar, 1 cup of water, and 3 sprigs of fresh rosemary. Simmer until the sugar dissolves. Let cool completely. Remove rosemary. Add to 4 cups of fresh-squeezed lemon juice and 4 cups of cold water. Serve over ice."}}},
+                        sage: { name: "Sage", use: "Calms Stomach Discomfort", description: "Sage is known for its ability to reduce inflammation and spasms, making it useful for soothing a variety of digestive complaints. It also helps to reduce excessive sweating and can be used to treat diarrhea. Its carminative properties help to relieve gas and bloating.", howto: "A strong sage tea can be brewed and sipped to calm an upset stomach. Can also be used in cooking to aid in the digestion of rich foods.", color: 0x8d9e84, model: 'bushy', url: "https://placehold.co/200x200/8d9e84/ffffff?text=Sage", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Throats: Gargling with sage tea is a traditional remedy for sore throats and tonsillitis.", "Menopause Support: It is well-known for reducing hot flashes and night sweats.", "Cognitive Function: Research suggests that sage can improve memory and cognitive performance.", "Antimicrobial: Sage has powerful antimicrobial properties that can help fight off infections."], recipe: {name: "Sage & Onion Stuffing", instructions: "Sauté chopped onions and fresh sage leaves in butter until soft. Add breadcrumbs, chicken or vegetable broth, salt, and pepper. Mix well and bake until golden brown. This classic recipe aids digestion of heavy meals."}}},
+                        oregano: { name: "Oregano", use: "Fights Intestinal Bacteria", description: "Oregano oil has strong antimicrobial properties that can help fight harmful bacteria in the gut, promoting a healthier digestive flora. It is a potent antioxidant that can help protect the gut from damage. It is particularly useful for dealing with gut imbalances.", howto: "Oregano is a potent culinary herb. For a therapeutic dose, a few drops of oil can be taken in water, but it is very strong and should be used with caution.", color: 0x6e6e4a, model: 'bushy', url: "https://placehold.co/200x200/6e6e4a/ffffff?text=Oregano", moreBenefitsAndRecipe: {benefits: ["Antiviral: Oregano oil is effective against a wide range of viruses and bacteria.", "Fights Respiratory Infections: It can help to break up congestion and soothe coughs.", "Antifungal: It is a powerful remedy for fungal infections like Candida.", "Pain Relief: Applying oregano oil topically can help reduce muscle aches and joint pain."], recipe: {name: "Simple Oregano Vinaigrette", instructions: "In a small bowl, whisk together 3 tablespoons of olive oil, 1 tablespoon of red wine vinegar, 1 teaspoon of dried oregano, a pinch of salt, and a pinch of black pepper. Drizzle over salads or grilled vegetables."}}},
+                        basil: { name: "Basil", use: "Alleviates Gas and Bloating", description: "Basil leaves have a mild calming effect on the digestive system and can help reduce gas and bloating after a heavy meal. It also helps to support a healthy appetite and has mild anti-inflammatory properties that can soothe the gut lining.", howto: "Add fresh basil to salads, sauces, and soups. Can also be brewed as a tea for a soothing effect.", color: 0x4d7c0f, model: 'leafy-stem', url: "https://placehold.co/200x200/4d7c0f/ffffff?text=Basil", moreBenefitsAndRecipe: {benefits: ["Reduces Stress: Holy Basil (Tulsi) is an adaptogen that helps to reduce stress and anxiety.", "Fights Infections: Its antimicrobial properties can help fight off bacteria and viruses.", "Anti-inflammatory: It can help reduce inflammation throughout the body.", "Supports Respiratory Health: It is a great herb for soothing coughs and clearing congestion."], recipe: {name: "Refreshing Basil Pesto", instructions: "In a food processor, combine 2 cups of fresh basil leaves, 2 cloves of garlic, ½ cup of pine nuts, and ½ cup of parmesan cheese. Blend while slowly drizzling in ½ cup of olive oil until a smooth paste forms. Season with salt and pepper."}}},
+                    }
+                },
+                respiratory: {
+                    name: "The Respiratory Garden",
+                    description: "A breath of fresh air, this garden features plants known for supporting respiratory health, clearing congestion, and soothing coughs.",
+                    image: "https://placehold.co/150x150/6ee7b7/ffffff?text=Respiratory+System",
+                    plants: {
+                        eucalyptus: { name: "Eucalyptus", use: "Clears Stuffy Noses", description: "The strong, aromatic compound eucalyptol acts as a natural decongestant, helping to break up mucus and clear airways. It has powerful antimicrobial properties that can help fight respiratory infections. It's often used in steam inhalations to provide immediate relief from sinus congestion.", howto: "Inhale steam from a bowl of hot water with a few drops of eucalyptus oil. Do not ingest. Can also be used in chest rubs or salves.", color: 0x6ee7b7, model: 'bushy', url: "https://placehold.co/200x200/6ee7b7/ffffff?text=Eucalyptus", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Muscles: Applying eucalyptus oil topically can help relieve muscle aches and joint pain.", "Antiseptic: It is a powerful antiseptic for cleaning wounds and preventing infection.", "Insect Repellent: The strong scent of eucalyptus can repel insects.", "Reduces Fever: Its diaphoretic properties can help the body sweat and reduce a fever."], recipe: {name: "Eucalyptus Steam Inhalation", instructions: "Fill a large bowl with steaming hot water. Add 3-5 drops of eucalyptus essential oil. Place a towel over your head and lean over the bowl, inhaling deeply for 5-10 minutes. Keep eyes closed."}}},
+                        thyme: { name: "Thyme", use: "Soothes Coughs and Chest Congestion", description: "Thyme contains compounds that relax the throat muscles and reduce inflammation, making it an excellent remedy for coughs and bronchitis. It is a powerful antimicrobial, helping to fight the bacteria that cause respiratory infections. It also acts as an expectorant, helping to clear phlegm from the lungs.", howto: "Make a tea by steeping fresh or dried thyme in hot water. Add honey to soothe the throat. Can also be used in steam inhalations or syrups for coughs.", color: 0xa78bfa, model: 'bushy', url: "https://placehold.co/200x200/a78bfa/ffffff?text=Thyme", moreBenefitsAndRecipe: {benefits: ["Antiseptic: Thyme oil is a powerful antiseptic for minor cuts and scrapes.", "Digestive Aid: It can help relieve gas and bloating.", "Antifungal: It is effective against a range of fungal infections, including on the skin.", "Pain Relief: Thyme can help reduce inflammation and pain in muscles and joints."], recipe: {name: "Thyme & Honey Cough Syrup", instructions: "In a small saucepan, combine 1 cup of honey and a handful of fresh thyme sprigs. Heat gently over low heat for 10-15 minutes. Strain and store in an airtight jar. Take by the spoonful as needed for coughs."}}},
+                        mullein: { name: "Mullein", use: "Helps with Coughs and Lung Issues", description: "Mullein acts as an expectorant, which means it helps you cough up mucus. It's traditionally used to soothe the respiratory tract. The mucilage in the plant coats and soothes inflamed mucous membranes. It is particularly useful for dry, irritated coughs and bronchitis.", howto: "A tea made from the dried leaves and flowers can be effective. Strain well to remove fine hairs. Mullein oil is also used for earaches.", color: 0xfde047, model: 'tall-stem', url: "https://placehold.co/200x200/fde047/ffffff?text=Mullein", moreBenefitsAndRecipe: {benefits: ["Soothes Earaches: Mullein-infused oil is a popular remedy for soothing ear pain and inflammation.", "Anti-inflammatory: Its anti-inflammatory properties can help reduce swelling and pain in a variety of conditions.", "Diuretic: It can help to increase urination and flush toxins from the body.", "Wound Healing: The leaves can be used topically to promote wound healing."], recipe: {name: "Mullein Leaf Tea", instructions: "Place 1 teaspoon of dried mullein leaves in a tea ball or filter. Place in a mug and pour hot water over it. Steep for 10-15 minutes. Strain the tea to remove any fine hairs before drinking."}}},
+                        osha: { name: "Osha Root", use: "Supports Respiratory Health", description: "Osha root is a strong antiviral and antibacterial herb, prized for its ability to help fight respiratory infections and soothe a sore throat. It acts as a bronchodilator, helping to open the airways for easier breathing. It is often used to treat viral respiratory illnesses.", howto: "Used in tinctures or brewed as a tea. It has a strong flavor and a numbing effect. Osha should be used with caution and not by pregnant women.", color: 0x8d6e63, model: 'root', url: "https://placehold.co/200x200/8d6e63/ffffff?text=Osha+Root", moreBenefitsAndRecipe: {benefits: ["Relieves Allergies: Osha can help reduce the symptoms of seasonal allergies.", "Antimicrobial: It has powerful antimicrobial properties that can fight off bacteria and viruses.", "Soothes Sore Throats: Its numbing effect can provide immediate relief for a sore throat.", "Immune Support: It can help stimulate the immune system and protect against illness."], recipe: {name: "Osha Root Tincture", instructions: "Place dried osha root in a glass jar and cover with alcohol (like vodka). Let it sit for 4-6 weeks, shaking daily. Strain and store in a dark bottle. Take a few drops as needed for respiratory support."}}},
+                        elecampane: { name: "Elecampane", use: "Expectorant for Deep Coughs", description: "This root is a powerful expectorant, helping to clear phlegm from the lungs and chest. It also has a soothing effect on the bronchial tubes, reducing inflammation. It is traditionally used for chronic bronchitis and asthma due to its ability to clear deep-seated congestion.", howto: "Brew a strong tea from the dried root or take as a tincture.", color: 0xfd8d3c, model: 'root', url: "https://placehold.co/200x200/fd8d3c/ffffff?text=Elecampane", moreBenefitsAndRecipe: {benefits: ["Digestive Aid: It can help stimulate digestion and relieve gas and bloating.", "Antimicrobial: It has been shown to have antimicrobial properties against certain bacteria.", "Supports Liver Health: It can help detoxify the liver and improve its function.", "Relieves Skin Conditions: It can be used topically to treat skin conditions like eczema and psoriasis."], recipe: {name: "Elecampane Decoction", instructions: "Place 1 tablespoon of dried elecampane root in a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20 minutes. Strain and drink warm."}}},
+                        pleurisy: { name: "Pleurisy Root", use: "Relieves Chest Congestion", description: "Pleurisy root has a long history of use for relieving chest congestion and fevers associated with respiratory infections. It's an expectorant and diaphoretic, meaning it promotes sweating to help the body cool down. It is particularly useful for pleurisy, which is inflammation of the lungs and chest cavity.", howto: "Typically used as a tincture or in capsules. Not for long-term use. It should be used under the guidance of a professional herbalist.", color: 0xfd8d3c, model: 'root', url: "https://placehold.co/200x200/fd8d3c/ffffff?text=Pleurisy+Root", moreBenefitsAndRecipe: {benefits: ["Reduces Fevers: Its diaphoretic properties can help the body cool down during a fever.", "Anti-inflammatory: It can help reduce inflammation in the lungs and chest.", "Pain Relief: It can help relieve pain associated with pleurisy and other respiratory issues.", "Supports Lymphatic System: It is a lymphatic tonic that helps to clear toxins from the body."], recipe: {name: "Pleurisy Root Tea", instructions: "Add 1 teaspoon of dried pleurisy root to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm. Can be combined with honey and lemon."}}},
+                        lobelia: { name: "Lobelia", use: "Relaxes Airways during Asthma Attacks", description: "Used with extreme caution, lobelia can act as a powerful respiratory stimulant and antispasmodic, helping to relax the bronchioles during an acute asthma attack. It is a powerful herb that can help with severe respiratory constriction, but its use is restricted due to potential toxicity.", howto: "Must only be used under expert guidance in small doses, as it can be toxic.", color: 0x5a5a5a, model: 'bushy', url: "https://placehold.co/200x200/5a5a5a/ffffff?text=Lobelia", moreBenefitsAndRecipe: {benefits: ["Muscle Relaxant: It can help relax muscles and relieve tension throughout the body.", "Antispasmodic: It can help stop spasms and cramps.", "Relieves Pain: It can be used topically to help with muscle pain and soreness.", "Supports Respiratory System: It is a powerful herb for a range of respiratory issues, but should be used with extreme caution."], recipe: {name: "Lobelia Tincture", instructions: "Lobelia is a very potent herb and is not recommended for home use. A professional herbalist can prepare a tincture for you."}}},
+                        horehound: { name: "Horehound", use: "Soothes Sore Throats and Coughs", description: "This herb contains compounds that can thin mucus and act as a cough suppressant, making it effective for dry, hacking coughs. It is also a mild expectorant, helping to move mucus out of the chest. It's a common ingredient in many cough drops and lozenges.", howto: "Often found in lozenges or can be brewed as a very bitter tea. To make it more palatable, it can be mixed with honey and lemon.", color: 0x9e9e9e, model: 'leafy-stem', url: "https://placehold.co/200x200/9e9e9e/ffffff?text=Horehound", moreBenefitsAndRecipe: {benefits: ["Digestive Aid: It can help with indigestion and bloating.", "Soothes Skin: A compress of horehound tea can help with skin irritations.", "Reduces Inflammation: It has anti-inflammatory properties that can help with pain and swelling.", "Antimicrobial: It has compounds that can help fight off infections."], recipe: {name: "Horehound Candy", instructions: "In a saucepan, combine 1 cup of horehound tea with 2 cups of sugar. Bring to a boil and simmer until it reaches the hard crack stage (300°F). Pour onto a greased pan and let cool. Break into small pieces."}}},
+                        coltsfoot: { name: "Coltsfoot", use: "Cough Suppressant", description: "The leaves of coltsfoot have been traditionally used to suppress stubborn coughs and soothe irritated lungs and throats. Its soothing properties come from its mucilage content, which coats the mucous membranes. It is useful for dry coughs and bronchitis.", howto: "Used in herbal teas. It should be used for short periods only and is not recommended for pregnant women or children.", color: 0x6e6e6e, model: 'leafy-ground', url: "https://placehold.co/200x200/6e6e6e/ffffff?text=Coltsfoot", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Throats: Its demulcent properties can help with a sore throat.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Antimicrobial: It has compounds that can help fight off infections.", "Wound Healing: The leaves can be used topically to help with minor wounds."], recipe: {name: "Coltsfoot Infusion", instructions: "Add 1 tablespoon of dried coltsfoot leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        elderberry: { name: "Elderberry", use: "Boosts Immunity to Fight Colds", description: "Elderberries are rich in antioxidants and flavonoids that help to strengthen the immune system and can reduce the duration and severity of colds and flu. They have antiviral properties that can help prevent viruses from attaching to and entering cells. Elderberry syrup is a popular remedy for winter illnesses.", howto: "Most commonly consumed as a syrup or tincture. It can also be brewed as a tea.", color: 0x8b008b, model: 'berry-bush', url: "https://placehold.co/200x200/8b008b/ffffff?text=Elderberry", moreBenefitsAndRecipe: {benefits: ["Pain Relief: It has anti-inflammatory properties that can help with muscle aches and joint pain.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Reduces Inflammation: It can help with a range of inflammatory conditions.", "Diuretic: It can help to increase urination and flush toxins from the body."], recipe: {name: "Elderberry Syrup", instructions: "In a pot, combine 1 cup of elderberries, 4 cups of water, and a cinnamon stick. Bring to a boil, then reduce heat and simmer for 45 minutes. Strain the liquid and discard the berries. Stir in 1 cup of honey. Store in an airtight jar in the fridge."}}},
+                        echinacea: { name: "Echinacea", use: "Immune System Stimulant", description: "Echinacea is well-known for its ability to boost the immune system, helping the body fight off respiratory infections like the common cold. It stimulates the production of immune cells and has antiviral and antibacterial properties. It is often taken at the first sign of illness to help shorten its duration.", howto: "Taken as a tincture, capsule, or tea at the first signs of illness. It is not recommended for continuous long-term use.", color: 0x9c4221, model: 'flower-stem', url: "https://placehold.co/200x200/9c4221/ffffff?text=Echinacea", moreBenefitsAndRecipe: {benefits: ["Wound Healing: It can be used topically to help with wound healing and skin infections.", "Pain Relief: It can help with pain and inflammation.", "Antimicrobial: It has compounds that can help fight off infections.", "Soothes Sore Throats: It can be used as a gargle to soothe a sore throat."], recipe: {name: "Echinacea Tincture", instructions: "Place fresh or dried echinacea root in a glass jar. Cover with alcohol (like vodka) and let it sit for 4-6 weeks, shaking daily. Strain and store in a dark bottle. Take a few drops as needed for immune support."}}},
+                        astragalus: { name: "Astragalus", use: "Immune and Respiratory Tonic", description: "Astragalus root is an adaptogen that builds long-term immune strength, particularly in the respiratory system, making it great for prevention. It is a powerful immune-building herb that can help protect against upper respiratory infections. It also has a mild diuretic and blood sugar-regulating effect.", howto: "Can be added to soups, stews, or brewed as a long-simmering decoction. It is a slow-acting tonic that works best with consistent use over time.", color: 0xd4ac0d, model: 'root', url: "https://placehold.co/200x200/d4ac0d/ffffff?text=Astragalus", moreBenefitsAndRecipe: {benefits: ["Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Anti-inflammatory: It can help reduce inflammation throughout the body.", "Supports Kidney Health: It can help with a range of kidney issues.", "Blood Sugar Control: It can help to regulate blood sugar levels."], recipe: {name: "Astragalus Root Decoction", instructions: "Place 1 tablespoon of dried astragalus root in a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20-30 minutes. Strain and drink warm."}}},
+                        reishi: { name: "Reishi Mushroom", use: "Adaptogen for Respiratory Health", description: "Reishi is a medicinal mushroom that supports lung function and can help calm the body's allergic response, making it useful for asthma. As an adaptogen, it helps the body cope with stress, which can often trigger respiratory issues. It also has anti-inflammatory and immune-modulating properties.", howto: "Usually consumed as a tea or powdered extract. The taste is quite bitter, so it is often combined with other ingredients.", color: 0x8b4513, model: 'mushroom', url: "https://placehold.co/200x200/8b4513/ffffff?text=Reishi+Mushroom", moreBenefitsAndRecipe: {benefits: ["Reduces Stress: As an adaptogen, reishi helps the body cope with physical and mental stress.", "Improves Sleep: It has a calming effect that can help with insomnia and restlessness.", "Supports Cardiovascular Health: It can help lower blood pressure and cholesterol.", "Anticancer Properties: Research suggests that reishi may help inhibit the growth of certain cancer cells."], recipe: {name: "Reishi Tea", instructions: "Add 1 tablespoon of dried reishi mushroom slices to a pot with 4 cups of water. Bring to a boil, then reduce heat and simmer for 1-2 hours. Strain and drink warm. Can be sweetened with honey."}}},
+                        oregano: { name: "Oregano", use: "Antimicrobial for Respiratory Infections", description: "Oregano oil contains carvacrol, a potent antimicrobial that can help combat bacteria and viruses that cause respiratory infections. It is a strong expectorant, helping to clear phlegm from the lungs. It is a powerful but intense remedy that should be used with care.", howto: "A few drops of the oil can be put in a capsule or diluted in a carrier oil. Do not take undiluted oil directly.", color: 0x6e6e4a, model: 'bushy', url: "https://placehold.co/200x200/6e6e4a/ffffff?text=Oregano", moreBenefitsAndRecipe: {benefits: ["Digestive Aid: It can help with indigestion and bloating.", "Antifungal: It is effective against a range of fungal infections, including on the skin.", "Pain Relief: Applying oregano oil topically can help reduce muscle aches and joint pain.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage."], recipe: {name: "Oregano Infused Oil", instructions: "Fill a glass jar with fresh oregano sprigs. Cover completely with olive oil. Seal the jar and let it sit in a cool, dark place for 2-4 weeks. Strain and store. Use topically for muscle aches."}}},
+                        sage: { name: "Sage", use: "Soothes a Sore Throat", description: "Sage has astringent and antiseptic properties that can soothe a sore throat and help clear mucus from the lungs. It is particularly effective as a gargle for pharyngitis and tonsillitis. The volatile oils in sage help to kill germs and reduce inflammation.", howto: "Gargle with a strong sage tea or drink it to soothe your throat. Adding honey can improve the flavor and provide additional soothing properties.", color: 0x8d9e84, model: 'bushy', url: "https://placehold.co/200x200/8d9e84/ffffff?text=Sage", moreBenefitsAndRecipe: {benefits: ["Menopause Support: It is well-known for reducing hot flashes and night sweats.", "Cognitive Function: Research suggests that sage can improve memory and cognitive performance.", "Antimicrobial: Sage has powerful antimicrobial properties that can help fight off infections.", "Reduces Excessive Sweating: It can help to reduce excessive sweating when taken internally."], recipe: {name: "Sage & Onion Stuffing", instructions: "Sauté chopped onions and fresh sage leaves in butter until soft. Add breadcrumbs, chicken or vegetable broth, salt, and pepper. Mix well and bake until golden brown. This classic recipe aids digestion of heavy meals."}}},
+                        rosemary: { name: "Rosemary", use: "Aromatic Decongestant", description: "Inhaling the steam from rosemary can help clear the nasal passages and relieve sinus pressure. Its camphor content helps to break up congestion. The scent is also known to stimulate memory and focus.", howto: "Add a sprig of rosemary to a bowl of hot water and inhale the steam. Can also be used in chest rubs or vaporizers.", color: 0x5a7a58, model: 'bushy', url: "https://placehold.co/200x200/5a7a58/ffffff?text=Rosemary", moreBenefitsAndRecipe: {benefits: ["Improves Memory: The scent and compounds in rosemary are known to boost memory and concentration.", "Antioxidant Power: It is rich in antioxidants that protect the body from free radical damage.", "Stimulates Hair Growth: Rosemary oil is a popular remedy for stimulating blood flow to the scalp and promoting hair growth.", "Pain Relief: Applying rosemary oil topically can help relieve muscle aches and joint pain."], recipe: {name: "Rosemary Lemonade", instructions: "In a saucepan, combine 1 cup of sugar, 1 cup of water, and 3 sprigs of fresh rosemary. Simmer until the sugar dissolves. Let cool completely. Remove rosemary. Add to 4 cups of fresh-squeezed lemon juice and 4 cups of cold water. Serve over ice."}}},
+                        fenugreek: { name: "Fenugreek", use: "Breaks up Congestion", description: "Fenugreek seeds are a natural expectorant that can help loosen and remove mucus from the respiratory system. It has a warming, demulcent effect that soothes irritated mucous membranes. It is also known to increase milk production in breastfeeding mothers.", howto: "Brew a strong tea from the seeds. It has a slightly bitter taste. Can also be used as a spice in curries and stews.", color: 0xcc9900, model: 'seed-cluster', url: "https://placehold.co/200x200/cc9900/ffffff?text=Fenugreek", moreBenefitsAndRecipe: {benefits: ["Aids Lactation: It is well-known for increasing milk production in nursing mothers.", "Reduces Blood Sugar: It can help to regulate blood sugar levels.", "Weight Management: It can help reduce appetite and promote a feeling of fullness.", "Digestive Aid: It can help with a range of digestive issues from indigestion to constipation."], recipe: {name: "Fenugreek Tea", instructions: "Add 1 teaspoon of fenugreek seeds to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        andrographis: { name: "Andrographis", use: "Fights Viral Respiratory Illnesses", description: "This powerful immune-boosting herb is used to reduce the symptoms and duration of upper respiratory tract infections and the common cold. It is a potent anti-inflammatory and has been shown to be effective against a range of viruses and bacteria. It is a bitter herb with a strong therapeutic effect.", howto: "Typically taken as a capsule or tincture. Due to its bitterness, it is not often used as a tea.", color: 0x7a8c66, model: 'leafy-stem', url: "https://placehold.co/200x200/7a8c66/ffffff?text=Andrographis", moreBenefitsAndRecipe: {benefits: ["Immune Support: It stimulates the immune system to fight off infections.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Liver Health: It can help detoxify the liver and improve its function.", "Anticancer Properties: Research suggests that it may help inhibit the growth of certain cancer cells."], recipe: {name: "Andrographis Tincture", instructions: "Andrographis is a very potent herb and is best used as a tincture. The tincture is made by soaking the plant in alcohol for several weeks. Take a few drops as needed for immune support."}}},
+                        goldenseal: { name: "Goldenseal", use: "Antimicrobial for Colds", description: "Goldenseal contains berberine, a compound that helps fight bacteria and viruses, making it a powerful herb for fighting respiratory infections. It has a soothing effect on mucous membranes and is often used for sore throats, sinusitis, and bronchitis. It is a potent but endangered plant.", howto: "Usually taken as a tincture or capsule. Due to its endangered status, sustainably sourced or cultivated goldenseal should be used.", color: 0xf5f5dc, model: 'root', url: "https://placehold.co/200x200/f5f5dc/ffffff?text=Goldenseal", moreBenefitsAndRecipe: {benefits: ["Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances.", "Skin Health: It can be used topically to treat skin infections and wounds.", "Urinary Tract Health: It can help fight infections in the urinary tract.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions."], recipe: {name: "Goldenseal Tincture", instructions: "Goldenseal is a very potent herb and is best used as a tincture. The tincture is made by soaking the plant in alcohol for several weeks. Take a few drops as needed for immune support."}}},
+                        licorice: { name: "Licorice Root", use: "Soothes Irritated Lungs", description: "The soothing mucilage in licorice root helps calm irritated airways and can act as a mild expectorant to clear congestion. Its anti-inflammatory properties can help reduce bronchial inflammation, making it useful for conditions like asthma and allergies. It is also known to help with adrenal fatigue.", howto: "Brew a tea from the root, often in combination with other herbs. Avoid long-term use as it can raise blood pressure.", color: 0x6e4e37, model: 'root', url: "https://placehold.co/200x200/6e4e37/ffffff?text=Licorice+Root", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Throats: Its demulcent properties make it a classic remedy for coughs and sore throats.", "Adrenal Support: It is an adaptogen that helps support the adrenal glands during times of stress.", "Antiviral: It has compounds that can help fight viral infections.", "Digestive Aid: It can help heal and protect the stomach lining."], recipe: {name: "Licorice Root Tea", instructions: "Add 1 teaspoon of dried licorice root to 1 cup of water in a small saucepan. Bring to a boil and then simmer for 15 minutes. Strain and serve warm. Can be combined with ginger and cinnamon."}}},
+                    }
+                },
+                mind: {
+                    name: "The Mind & Mood Garden",
+                    description: "A peaceful retreat for your mind. These plants are celebrated for their ability to reduce stress, calm anxiety, and promote restful sleep.",
+                    image: "https://placehold.co/150x150/d9f99d/ffffff?text=Brain+and+Nervous+System",
+                    plants: {
+                        lavender: { name: "Lavender", use: "Promotes Relaxation and Sleep", description: "The scent of lavender is widely known to lower heart rate and blood pressure, creating a calm state perfect for sleep or stress relief. Its primary active compounds, linalool and linalyl acetate, have a sedative effect on the central nervous system. It can also help to ease headaches and muscle tension.", howto: "Use as an essential oil in a diffuser or place a sachet of dried flowers by your pillow. A few drops of oil can also be added to a warm bath.", color: 0xc4b5fd, model: 'flower-stem', url: "https://placehold.co/200x200/c4b5fd/ffffff?text=Lavender", moreBenefitsAndRecipe: {benefits: ["Soothes Skin: Lavender essential oil is a popular remedy for soothing minor burns, cuts, and insect bites.", "Pain Relief: It can help reduce pain and inflammation when applied topically.", "Antifungal: It is effective against a range of fungal infections.", "Wound Healing: It can help promote wound healing and reduce scarring."], recipe: {name: "Lavender Infused Honey", instructions: "Gently warm 1 cup of honey in a small saucepan. Stir in 2 tablespoons of dried lavender buds. Remove from heat and let it sit for 2 hours. Strain out the lavender and store in a jar. Use in tea or on toast."}}},
+                        valerian: { name: "Valerian", use: "Encourages Deeper, Restful Sleep", description: "Valerian root is a popular sedative herb, used for centuries to treat insomnia. It helps improve sleep quality without morning grogginess by affecting GABA receptors in the brain, which promote a calming effect. It can also help reduce the anxiety associated with sleeplessness.", howto: "Commonly taken as a tea or tincture before bedtime. The root has a very strong, earthy smell that some find unpleasant.", color: 0xfbcfe8, model: 'root', url: "https://placehold.co/200x200/fbcfe8/ffffff?text=Valerian", moreBenefitsAndRecipe: {benefits: ["Reduces Anxiety: Its sedative effects can help calm a racing mind and reduce feelings of anxiety.", "Relieves Muscle Cramps: It can help with muscle spasms and cramps.", "Pain Relief: It has mild pain-relieving properties that can help with headaches and other aches.", "Supports Digestive Health: Its antispasmodic properties can help with stomach cramps."], recipe: {name: "Valerian Root Tea", instructions: "Add 1 teaspoon of dried valerian root to a mug. Pour hot water over it and let it steep for 15 minutes. Strain and drink before bed. It can be combined with chamomile and lemon balm to improve the flavor."}}},
+                        lemonbalm: { name: "Lemon Balm", use: "Reduces Stress and Anxiety", description: "A member of the mint family, lemon balm has a gentle, calming effect on the nervous system, helping to lift spirits and reduce anxious feelings. It is particularly effective for anxiety associated with indigestion and stress. It can also help improve memory and cognitive function.", howto: "Enjoy a refreshing tea from its fresh or dried leaves, or add fresh leaves to water. Can also be taken as a tincture for a stronger effect.", color: 0xd9f99d, model: 'leafy-stem', url: "https://placehold.co/200x200/d9f99d/ffffff?text=Lemon+Balm", moreBenefitsAndRecipe: {benefits: ["Antiviral: It has antiviral properties that can help fight off infections, particularly herpes.", "Improves Sleep: Its calming effects can help with insomnia and restlessness.", "Digestive Aid: It can help with indigestion, gas, and bloating.", "Cognitive Boost: Research suggests it can improve memory and cognitive function."], recipe: {name: "Lemon Balm Infusion", instructions: "Place a handful of fresh lemon balm leaves in a teapot. Pour hot water over the leaves and let it steep for 10-15 minutes. Strain and enjoy warm or cold with a slice of lemon."}}},
+                        stjohnswort: { name: "St. John's Wort", use: "Lifts Mood and Eases Depression", description: "St. John's Wort is a well-researched herb for mild to moderate depression. It works by affecting neurotransmitters in the brain, such as serotonin and dopamine. It can also help with nerve pain and seasonal affective disorder (SAD).", howto: "Typically taken as a capsule or tincture. Must be used with caution, as it can interact with a wide range of medications, including antidepressants and birth control.", color: 0xffd700, model: 'bushy', url: "https://placehold.co/200x200/ffd700/ffffff?text=St.+John's+Wort", moreBenefitsAndRecipe: {benefits: ["Relieves Nerve Pain: An infused oil can be applied topically to soothe nerve-related pain from injuries.", "Antiviral: It has been shown to have antiviral properties.", "Wound Healing: It can be used topically to promote wound healing.", "Anti-inflammatory: It has anti-inflammatory properties that can help with pain and swelling."], recipe: {name: "St. John's Wort Infused Oil", instructions: "Fill a glass jar with fresh St. John's Wort flowers. Cover completely with olive oil. Seal the jar and let it sit in a sunny window for 4-6 weeks. Strain and store in a dark bottle. Use topically for nerve pain."}}},
+                        ashwagandha: { name: "Ashwagandha", use: "Reduces Stress and Anxiety", description: "An adaptogen, ashwagandha helps the body manage stress by lowering cortisol levels. It provides a calming energy without sedation and can help improve sleep quality. It is also known to boost physical performance, reduce inflammation, and support thyroid function.", howto: "Most often taken as a powdered root in capsules or added to beverages like golden milk.", color: 0x8d6e63, model: 'root', url: "https://placehold.co/200x200/8d6e63/ffffff?text=Ashwagandha", moreBenefitsAndRecipe: {benefits: ["Boosts Physical Performance: It can help improve strength and endurance during exercise.", "Supports Thyroid Function: It can help normalize thyroid hormone levels.", "Anti-inflammatory: It has anti-inflammatory properties that can help with pain and swelling.", "Improves Sleep: It can help with insomnia and restlessness."], recipe: {name: "Ashwagandha Smoothie", instructions: "In a blender, combine 1 frozen banana, 1 cup of milk (dairy or plant-based), 1 teaspoon of ashwagandha powder, and a pinch of cinnamon. Blend until smooth and creamy."}}},
+                        passionflower: { name: "Passionflower", use: "Calms Nervousness", description: "Passionflower has a gentle sedative effect, making it useful for reducing anxiety, nervousness, and promoting sleep. It works by increasing levels of GABA in the brain. It is particularly helpful for restless sleep and a racing mind.", howto: "Brew a tea from the dried leaves and flowers or take as a tincture. It is a gentle and safe herb for long-term use.", color: 0x9333ea, model: 'vine', url: "https://placehold.co/200x200/9333ea/ffffff?text=Passionflower", moreBenefitsAndRecipe: {benefits: ["Soothes Muscle Spasms: Its antispasmodic properties can help relieve muscle cramps.", "Pain Relief: It has mild pain-relieving properties that can help with headaches and other aches.", "Digestive Aid: It can help with stomach cramps and indigestion.", "Supports Heart Health: It has a calming effect on the heart and can help with heart palpitations."], recipe: {name: "Passionflower Tea", instructions: "Add 1 teaspoon of dried passionflower leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink before bed."}}},
+                        kava: { name: "Kava", use: "Promotes Relaxation and Social Ease", description: "From the South Pacific, Kava root is known for its ability to reduce anxiety and create a feeling of calm and mild euphoria. It is a powerful muscle relaxant and can help with social anxiety. Its effects are very noticeable and can be compared to alcohol, but without the mental impairment.", howto: "Traditionally prepared as a beverage from the ground root. Use with caution due to liver concerns and always choose a reputable source.", color: 0x8b8b7a, model: 'root', url: "https://placehold.co/200x200/8b8b7a/ffffff?text=Kava", moreBenefitsAndRecipe: {benefits: ["Relieves Muscle Tension: It is a powerful muscle relaxant that can help with tension throughout the body.", "Pain Relief: It can help with a range of pain issues from headaches to muscle aches.", "Stress Relief: Its calming effects can help with stress and anxiety.", "Sleep Aid: It can help with insomnia and restlessness."], recipe: {name: "Kava Drink", instructions: "In a bowl, combine ¼ cup of kava root powder with 2 cups of cold water. Knead the mixture with your hands for 5-10 minutes. Strain the liquid through a cheesecloth or strainer bag. Drink the liquid."}}},
+                        rhodiola: { name: "Rhodiola Rosea", use: "Boosts Mental Energy and Focus", description: "An adaptogen that helps improve mental and physical stamina, reducing fatigue and brain fog caused by stress. It works by normalizing cortisol levels and enhancing neurotransmitter activity. It is particularly useful for students and those with high-stress jobs.", howto: "Taken as a capsule or tincture in the morning to enhance focus. It can be stimulating, so it's not recommended before bed.", color: 0x808080, model: 'root', url: "https://placehold.co/200x200/808080/ffffff?text=Rhodiola+Rosea", moreBenefitsAndRecipe: {benefits: ["Fights Fatigue: It can help improve physical and mental stamina and reduce fatigue.", "Improves Mood: It can help with a range of mood issues from anxiety to depression.", "Supports Adrenal Health: It is an adaptogen that helps the body cope with stress.", "Antioxidant: It is a rich source of antioxidants that protect the body from damage."], recipe: {name: "Rhodiola Rosea Tea", instructions: "Add 1 teaspoon of dried rhodiola root to a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20 minutes. Strain and drink warm."}}},
+                        skullcap: { name: "Skullcap", use: "Calms the Nervous System", description: "This herb is a nervine that can soothe frayed nerves, quiet a racing mind, and help relieve anxiety and tension headaches. It is a gentle but effective sedative that can help with restlessness and insomnia. It is often used to help with withdrawal symptoms from sedatives.", howto: "Brew a tea from the dried leaves or take as a tincture. It is a great herb to use for temporary relief of anxiety.", color: 0x6b7280, model: 'leafy-stem', url: "https://placehold.co/200x200/6b7280/ffffff?text=Skullcap", moreBenefitsAndRecipe: {benefits: ["Relieves Insomnia: Its sedative effects can help with sleeplessness and restlessness.", "Reduces Muscle Spasms: It has antispasmodic properties that can help with muscle cramps.", "Pain Relief: It can help with tension headaches and other aches.", "Supports Digestive Health: Its antispasmodic properties can help with stomach cramps."], recipe: {name: "Skullcap Tea", instructions: "Add 1 tablespoon of dried skullcap leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        californiapoppy: { name: "California Poppy", use: "Gentle Sleep Aid", description: "California poppy is a mild sedative and pain reliever, used to relax the body and mind and promote restful sleep without being overly strong. It is often used as an alternative to stronger sleep aids for children and adults. It can also help to ease nervous tension and physical pain.", howto: "Often used in tinctures or teas for a calming effect. It can be combined with other sleep-promoting herbs for a stronger effect.", color: 0xff8c00, model: 'flower-stem', url: "https://placehold.co/200x200/ff8c00/ffffff?text=California+Poppy", moreBenefitsAndRecipe: {benefits: ["Pain Relief: It has mild pain-relieving properties that can help with a range of pain issues.", "Reduces Anxiety: Its sedative effects can help calm a racing mind and reduce feelings of anxiety.", "Muscle Relaxant: It can help with muscle spasms and cramps.", "Supports Digestive Health: Its antispasmodic properties can help with stomach cramps."], recipe: {name: "California Poppy Tea", instructions: "Add 1 teaspoon of dried california poppy to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink before bed."}}},
+                        gotukola: { name: "Gotu Kola", use: "Improves Brain Function", description: "This herb is considered a brain tonic in traditional medicine, used to enhance memory, improve circulation to the brain, and reduce mental fatigue. It is an adaptogen that helps the body cope with stress. It has also been shown to help with anxiety and depression.", howto: "Can be added to smoothies, salads, or taken as a capsule. It has a mild, earthy flavor.", color: 0x8d6e4b, model: 'leafy-ground', url: "https://placehold.co/200x200/8d6e4b/ffffff?text=Gotu+Kola", moreBenefitsAndRecipe: {benefits: ["Wound Healing: It can be used topically to promote wound healing and reduce scarring.", "Supports Vein Health: It can help with a range of vein issues from varicose veins to hemorrhoids.", "Reduces Anxiety: Its calming effects can help with anxiety and restlessness.", "Improves Skin Health: It can help with a range of skin issues from eczema to psoriasis."], recipe: {name: "Gotu Kola Smoothie", instructions: "In a blender, combine 1 cup of fresh gotu kola leaves, 1 frozen banana, 1 cup of milk (dairy or plant-based), and a spoonful of honey. Blend until smooth and creamy."}}},
+                        bacopa: { name: "Bacopa Monnieri", use: "Enhances Memory and Cognition", description: "Bacopa is an adaptogen and nootropic that has been shown to improve memory and learning, particularly in stressful situations. It works by improving communication between neurons in the brain. It is a slow-acting herb that requires consistent use for several weeks to see a benefit.", howto: "Typically taken as a daily supplement in capsule form. It is a key herb in Ayurvedic medicine for cognitive enhancement.", color: 0x968c8b, model: 'leafy-ground', url: "https://placehold.co/200x200/968c8b/ffffff?text=Bacopa", moreBenefitsAndRecipe: {benefits: ["Reduces Stress: As an adaptogen, bacopa helps the body cope with physical and mental stress.", "Supports Liver Health: It can help detoxify the liver and improve its function.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Reduces Anxiety: Its calming effects can help with anxiety and restlessness."], recipe: {name: "Bacopa Tea", instructions: "Add 1 teaspoon of dried bacopa leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        ginseng: { name: "Ginseng", use: "Boosts Stamina and Reduces Fatigue", description: "Ginseng is a well-known adaptogen that helps the body cope with physical and mental stress, boosting energy levels and stamina. It is a powerful tonic for the entire body, improving resilience to stress and illness. It is also used to support the immune system and improve circulation.", howto: "The root can be brewed as a tea, or taken as a powder in capsules. It has a distinct, earthy flavor.", color: 0xd9c58e, model: 'root', url: "https://placehold.co/200x200/d9c58e/ffffff?text=Ginseng", moreBenefitsAndRecipe: {benefits: ["Supports Immune System: It can help stimulate the immune system and protect against illness.", "Improves Circulation: It can help improve blood flow throughout the body.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Cognitive Boost: It can help improve memory and focus."], recipe: {name: "Ginseng Tea", instructions: "Add 1 teaspoon of dried ginseng root slices to a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20-30 minutes. Strain and drink warm."}}},
+                        schisandra: { name: "Schisandra Berry", use: "Anti-Stress Adaptogen", description: "The berries contain compounds that protect the body from the physical and emotional effects of stress, and also improve mental performance. It is known as the 'five flavor fruit' in Chinese medicine, and it is a powerful tonic for the mind, body, and spirit. It helps to improve focus and endurance.", howto: "The berries can be eaten, or brewed into a tart tea. It can also be found in tinctures and capsules.", color: 0x9e102f, model: 'berry-cluster', url: "https://placehold.co/200x200/9e102f/ffffff?text=Schisandra+Berry", moreBenefitsAndRecipe: {benefits: ["Supports Liver Health: It can help detoxify the liver and improve its function.", "Reduces Fatigue: It can help improve physical and mental stamina and reduce fatigue.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Improves Sleep: It can help with insomnia and restlessness."], recipe: {name: "Schisandra Berry Tea", instructions: "Add 1 tablespoon of dried schisandra berries to a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 15-20 minutes. Strain and drink warm."}}},
+                        holybasil: { name: "Holy Basil", use: "Calms Stress and Anxiety", description: "Also known as Tulsi, holy basil is a powerful adaptogen that helps to normalize stress hormones and calm the nervous system. It has a subtle, uplifting effect on mood and can help with mental clarity. It is also an excellent herb for supporting the immune system and respiratory health.", howto: "Brew a delicious tea from the fresh or dried leaves. Can also be taken as a tincture or capsule for a stronger effect.", color: 0x4a7c4a, model: 'leafy-stem', url: "https://placehold.co/200x200/4a7c4a/ffffff?text=Holy+Basil", moreBenefitsAndRecipe: {benefits: ["Supports Immune System: It can help stimulate the immune system and protect against illness.", "Fights Infections: Its antimicrobial properties can help fight off bacteria and viruses.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Respiratory Support: It is a great herb for soothing coughs and clearing congestion."], recipe: {name: "Tulsi Tea", instructions: "Add a handful of fresh holy basil leaves to a teapot. Pour hot water over the leaves and let it steep for 5-10 minutes. Strain and enjoy warm or cold with a slice of lemon."}}},
+                        damiana: { name: "Damiana", use: "Relieves Anxiety and Tension", description: "This herb has a mild sedative effect, making it useful for lifting the spirits and relieving anxiety and nervous exhaustion. It is a mild aphrodisiac and can help with low libido and hormonal imbalances. It has a slightly bitter taste but a pleasant aroma.", howto: "Brew a tea from the dried leaves. It has a slightly bitter taste. Can also be used in tinctures and capsules.", color: 0x7c7c51, model: 'leafy-stem', url: "https://placehold.co/200x200/7c7c51/ffffff?text=Damiana", moreBenefitsAndRecipe: {benefits: ["Aphrodisiac: It can help with low libido and hormonal imbalances.", "Stress Relief: It has a calming effect that can help with stress and anxiety.", "Digestive Aid: It can help with a range of digestive issues.", "Pain Relief: It can help with muscle aches and pain."], recipe: {name: "Damiana Tea", instructions: "Add 1 tablespoon of dried damiana leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        rose: { name: "Rose", use: "Eases Feelings of Sadness", description: "The petals of the rose have a gentle, uplifting effect on the mind and spirit, helping to ease feelings of grief and sorrow. Its gentle sedative properties can help with anxiety and nervous tension. Rosewater is also a great toner for the skin.", howto: "Brew a tea from dried rose petals or add rosewater to beverages. Can also be used in aromatherapy to uplift mood.", color: 0xffa07a, model: 'flower-stem', url: "https://placehold.co/200x200/ffa07a/ffffff?text=Rose", moreBenefitsAndRecipe: {benefits: ["Soothes Skin: Rosewater is a great toner for the skin and can help with redness and irritation.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Digestive Aid: Rose tea can help with a range of digestive issues from indigestion to constipation."], recipe: {name: "Rose Infused Water", instructions: "Add a handful of fresh rose petals to a large glass jar. Fill with cold water and let it sit in the fridge for 2-4 hours. Strain and enjoy."}}},
+                        siberianginseng: { name: "Siberian Ginseng", use: "Fights Fatigue", description: "A distinct adaptogen from true ginseng, this herb is used to build resilience to stress and enhance physical and mental endurance. It helps to improve concentration and focus, and can be a great tonic for those who are overworked or stressed. It is also an immune stimulant.", howto: "Typically taken as a tincture or capsule. It is a slow-acting herb that works best with consistent use.", color: 0x886255, model: 'root', url: "https://placehold.co/200x200/886255/ffffff?text=Siberian+Ginseng", moreBenefitsAndRecipe: {benefits: ["Supports Immune System: It can help stimulate the immune system and protect against illness.", "Reduces Stress: As an adaptogen, it helps the body cope with physical and mental stress.", "Supports Adrenal Health: It can help with adrenal fatigue and exhaustion.", "Improves Focus: It can help improve mental clarity and focus."], recipe: {name: "Siberian Ginseng Tea", instructions: "Add 1 teaspoon of dried Siberian ginseng root to a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20-30 minutes. Strain and drink warm."}}},
+                        oats: { name: "Milky Oats", use: "Nourishes the Nervous System", description: "The green, unripe seed tops of the oat plant are a gentle nervine, used to nourish and restore a nervous system depleted by stress. It is a restorative tonic that can help with anxiety, exhaustion, and nervous tension. It is a very safe and gentle herb.", howto: "Taken as a tincture or an infusion made from the fresh plant. Can also be added to bathwater to soothe irritated skin.", color: 0x8c794f, model: 'seed-cluster', url: "https://placehold.co/200x200/8c794f/ffffff?text=Milky+Oats", moreBenefitsAndRecipe: {benefits: ["Relieves Anxiety: It has a calming effect that can help with anxiety and restlessness.", "Improves Sleep: It can help with insomnia and restlessness.", "Digestive Aid: It can help with a range of digestive issues.", "Supports Skin Health: It can be used topically to soothe irritated skin."], recipe: {name: "Milky Oats Tincture", instructions: "Place fresh milky oats in a glass jar. Cover completely with alcohol (like vodka) and let it sit for 2-4 weeks. Strain and store in a dark bottle. Take a few drops as needed."}}},
+                        chamomile: { name: "Chamomile", use: "Calming and Sleep-Inducing", description: "Chamomile is a mild sedative that can reduce anxiety, calm the mind, and promote a good night's sleep. Its gentle properties make it a great herb for both adults and children. It can also help with digestive issues and inflammation.", howto: "Brew a tea from the flowers. Best enjoyed before bedtime. Can also be used as a topical wash for skin irritation.", color: 0xfef08a, model: 'flower-stem', url: "https://placehold.co/200x200/fef08a/ffffff?text=Chamomile", moreBenefitsAndRecipe: {benefits: ["Soothes Skin: A cooled chamomile tea can be used as a compress or wash to soothe skin irritations and rashes.", "Digestive Aid: It can help with indigestion and stomach cramps.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Wound Healing: It can be used topically to help with minor wounds."], recipe: {name: "Calming Chamomile-Lavender Tea", instructions: "Add 1 tablespoon of dried chamomile flowers and 1 teaspoon of dried lavender buds to a tea infuser. Place in a mug and fill with hot water. Steep for 5-10 minutes. Sweeten with honey if desired."}}},
+                    }
+                },
+                circulatory: {
+                    name: "The Circulatory Garden",
+                    description: "Dedicated to plants that support heart health and blood flow. This garden helps you keep your cardiovascular system in rhythm.",
+                    image: "https://placehold.co/150x150/f87171/ffffff?text=Circulatory+System",
+                    plants: {
+                        hawthorn: { name: "Hawthorn", use: "Supports Heart Function", description: "Hawthorn berries, leaves, and flowers are used to strengthen the heart muscle and improve blood flow, making them a top herb for cardiovascular health. They help to dilate blood vessels, which can lower blood pressure. It is a slow-acting tonic that works best with consistent use.", howto: "Often consumed as a standardized extract in capsules or as a tea from the dried berries. A tincture is also very effective.", color: 0xf87171, model: 'berry-bush', url: "https://placehold.co/200x200/f87171/ffffff?text=Hawthorn", moreBenefitsAndRecipe: {benefits: ["Reduces Blood Pressure: It helps to dilate blood vessels, which can lower blood pressure.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the heart from damage.", "Eases Anxiety: It has a calming effect that can help with anxiety and heart palpitations.", "Diuretic: It can help to reduce fluid retention and swelling."], recipe: {name: "Hawthorn Berry Tea", instructions: "Add 1 tablespoon of dried hawthorn berries to a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 15-20 minutes. Strain and drink warm."}}},
+                        ginkgo: { name: "Ginkgo Biloba", use: "Promotes Healthy Circulation", description: "Ginkgo is known for its ability to improve blood flow throughout the body, especially to the brain, which may enhance memory and cognitive function. It is a powerful antioxidant that protects blood vessels from damage. It is also used to help with a range of conditions from memory loss to tinnitus.", howto: "Typically taken in standardized extract form as a supplement. It is one of the most widely used herbal supplements in the world.", color: 0x86efac, model: 'leafy-stem', url: "https://placehold.co/200x200/86efac/ffffff?text=Ginkgo+Biloba", moreBenefitsAndRecipe: {benefits: ["Improves Memory: It can help improve memory and cognitive function by increasing blood flow to the brain.", "Relieves Tinnitus: It can help with a range of ear issues from tinnitus to vertigo.", "Supports Eye Health: It can help to improve blood flow to the eyes and protect them from damage.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions."], recipe: {name: "Ginkgo Leaf Tea", instructions: "Add 1 teaspoon of dried ginkgo biloba leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        cayenne: { name: "Cayenne", use: "Stimulates Blood Flow", description: "Cayenne contains capsaicin, a compound that strengthens blood vessels and improves circulation by stimulating blood flow throughout the body. It is a powerful warming herb that can help with cold hands and feet. It is also used to help with pain management.", howto: "Added to food as a spice or taken in capsules. For topical use, it can be added to creams to relieve muscle pain.", color: 0xff4500, model: 'fruit-bush', url: "https://placehold.co/200x200/ff4500/ffffff?text=Cayenne", moreBenefitsAndRecipe: {benefits: ["Pain Relief: Capsaicin can help block pain signals when applied topically.", "Weight Management: It can help boost metabolism and suppress appetite.", "Reduces Inflammation: It has powerful anti-inflammatory properties that can help with a range of conditions.", "Supports Digestive Health: It can help to stimulate digestion and relieve gas."], recipe: {name: "Cayenne Pepper Detox Drink", instructions: "In a glass, combine 1 cup of warm water, 1 tablespoon of lemon juice, 1 tablespoon of maple syrup, and a pinch of cayenne pepper. Stir well and drink."}}},
+                        garlic: { name: "Garlic", use: "Reduces Blood Pressure and Cholesterol", description: "Garlic is a well-known herb that can help lower blood pressure and reduce cholesterol levels, supporting overall heart health. It has powerful antimicrobial properties and can help fight infections. It is a staple in many cuisines and has been used medicinally for thousands of years.", howto: "Eaten raw or cooked, or taken in odorless capsules. For maximum benefit, raw garlic is most potent.", color: 0xf4a460, model: 'bulbous', url: "https://placehold.co/200x200/f4a460/ffffff?text=Garlic", moreBenefitsAndRecipe: {benefits: ["Boosts Immunity: Its powerful antimicrobial properties can help fight off colds and flu.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Digestive Health: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Garlic Infused Oil", instructions: "In a small saucepan, combine 1 cup of olive oil and 4-5 cloves of peeled garlic. Heat gently over low heat for 15-20 minutes. Let cool, then strain and store in a jar. Use in cooking or as a salad dressing."}}},
+                        ginger: { name: "Ginger", use: "Improves Circulation", description: "Ginger has a warming effect that helps stimulate blood flow and reduce inflammation, which can improve overall cardiovascular health. It can also help to prevent blood clots. It is a versatile herb used in both cooking and medicine.", howto: "Used as a spice in cooking or brewed as a tea. It can also be taken in capsules for a more concentrated dose.", color: 0xfacc15, model: 'rhizome', url: "https://placehold.co/200x200/facc15/ffffff?text=Ginger", moreBenefitsAndRecipe: {benefits: ["Eases Nausea: Ginger is famous for its ability to quell nausea from motion sickness or morning sickness.", "Relieves Digestive Issues: It can help with indigestion, gas, and bloating.", "Soothes Sore Muscles: Applying ginger compresses or balms can help relieve muscle aches after exercise.", "Boosts Immunity: Its antimicrobial properties can help the body fight off infections."], recipe: {name: "Ginger & Lemon Tea", instructions: "Peel and thinly slice a 2-inch piece of fresh ginger. Add to a mug with a few slices of lemon. Pour hot water over it and let it steep for 10-15 minutes. Sweeten with honey to taste."}}},
+                        cinnamon: { name: "Cinnamon", use: "Supports Healthy Blood Sugar and Cholesterol", description: "Cinnamon bark can help improve blood circulation and regulate blood sugar levels, both important for long-term heart health. It has powerful anti-inflammatory and antioxidant properties. It is also a warming herb that can help with cold extremities.", howto: "Add to oatmeal, coffee, or use as a spice in cooking. A tea made from a cinnamon stick is a wonderful warming drink.", color: 0xcd7f32, model: 'bark-roll', url: "https://placehold.co/200x200/cd7f32/ffffff?text=Cinnamon", moreBenefitsAndRecipe: {benefits: ["Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Anti-inflammatory: It can help reduce inflammation throughout the body.", "Pain Relief: Cinnamon can help relieve menstrual cramps and muscle aches.", "Supports Cognitive Function: Research suggests that cinnamon may help improve brain function."], recipe: {name: "Cinnamon & Apple Oatmeal", instructions: "Cook a serving of oatmeal according to package directions. Stir in 1 teaspoon of cinnamon, a pinch of nutmeg, and a diced apple. Top with a spoonful of honey."}}},
+                        motherwort: { name: "Motherwort", use: "Calms the Heart", description: "Motherwort is known for its ability to calm heart palpitations and ease anxiety, offering a soothing effect on the cardiovascular system. It is a nervine and cardiotonic that can help with a nervous or anxious heart. It is also used to help with menstrual cramps and hormonal imbalances.", howto: "Brewed as a tea or taken as a tincture. It has a very bitter taste. It is best to use it under the guidance of a professional herbalist.", color: 0x808080, model: 'leafy-stem', url: "https://placehold.co/200x200/808080/ffffff?text=Motherwort", moreBenefitsAndRecipe: {benefits: ["Relieves Menstrual Cramps: Its antispasmodic properties can help alleviate period pain.", "Reduces Anxiety: Its calming effects can help with anxiety and restlessness.", "Supports Thyroid Health: It can help to regulate thyroid hormone levels.", "Soothes Sore Muscles: It can be used topically to help with muscle aches and pain."], recipe: {name: "Motherwort Tea", instructions: "Add 1 teaspoon of dried motherwort leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        yarrow: { name: "Yarrow", use: "Supports Vein Health and Blood Flow", description: "Yarrow can help tone blood vessels and is used traditionally to stop bleeding and improve circulation, particularly in the lower limbs. It is a powerful wound-healing herb that can be used topically to stop bleeding and promote healing. It is also a diaphoretic, helping to break fevers.", howto: "Brewed as a tea or applied topically as a compress. A poultice of fresh leaves can stop bleeding from a minor cut.", color: 0xffffff, model: 'flower-cluster', url: "https://placehold.co/200x200/ffffff/000000?text=Yarrow", moreBenefitsAndRecipe: {benefits: ["Stops Bleeding: Yarrow is a classic first-aid herb for stopping minor bleeding.", "Reduces Fevers: Its diaphoretic properties can help the body cool down during a fever.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Yarrow Tea", instructions: "Add 1 tablespoon of dried yarrow flowers to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm. Can be combined with honey and lemon."}}},
+                        danshen: { name: "Dan Shen", use: "Improves Blood Circulation", description: "A popular herb in Traditional Chinese Medicine, Dan Shen is used to promote healthy blood flow and can help with coronary artery disease. It helps to dissolve blood clots and improve microcirculation. It is a powerful herb that should be used with caution and under professional guidance.", howto: "Typically taken as a tincture or in capsules. It is a powerful herb that can interact with other medications.", color: 0x8b0000, model: 'root', url: "https://placehold.co/200x200/8b0000/ffffff?text=Dan+Shen", moreBenefitsAndRecipe: {benefits: ["Supports Liver Health: It can help detoxify the liver and improve its function.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Supports Kidney Health: It can help with a range of kidney issues."], recipe: {name: "Dan Shen Decoction", instructions: "Place 1 tablespoon of dried dan shen root in a small pot with 2 cups of water. Bring to a boil, then reduce heat and simmer for 20-30 minutes. Strain and drink warm."}}},
+                        reishi: { name: "Reishi Mushroom", use: "Supports Blood Pressure", description: "Reishi is an adaptogen that can help lower blood pressure and reduce inflammation, supporting a healthy heart and blood vessels. It is also known to help with stress and fatigue. It is a powerful tonic for the entire body, supporting the immune system and promoting longevity.", howto: "Usually consumed as a tea or powdered extract. The taste is quite bitter, so it is often combined with other ingredients.", color: 0x8b4513, model: 'mushroom', url: "https://placehold.co/200x200/8b4513/ffffff?text=Reishi+Mushroom", moreBenefitsAndRecipe: {benefits: ["Boosts Immunity: It can help stimulate the immune system and protect against illness.", "Reduces Stress: As an adaptogen, it helps the body cope with physical and mental stress.", "Improves Sleep: It has a calming effect that can help with insomnia and restlessness.", "Anticancer Properties: Research suggests that reishi may help inhibit the growth of certain cancer cells."], recipe: {name: "Reishi Tea", instructions: "Add 1 tablespoon of dried reishi mushroom slices to a pot with 4 cups of water. Bring to a boil, then reduce heat and simmer for 1-2 hours. Strain and drink warm. Can be sweetened with honey."}}},
+                        gynostemma: { name: "Gynostemma", use: "Nourishes the Cardiovascular System", description: "Also known as Jiaogulan, this herb can help reduce bad cholesterol and blood pressure, acting as a powerful tonic for the heart. It is an adaptogen that helps the body cope with stress. It is often referred to as 'southern ginseng' due to its similar tonic properties.", howto: "Brewed as a daily tea. It has a slightly sweet taste. Can be consumed hot or cold throughout the day.", color: 0x729b71, model: 'vine', url: "https://placehold.co/200x200/729b71/ffffff?text=Gynostemma", moreBenefitsAndRecipe: {benefits: ["Reduces Blood Pressure: It can help lower blood pressure and reduce cholesterol levels.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Fights Fatigue: It can help improve physical and mental stamina and reduce fatigue.", "Supports Liver Health: It can help detoxify the liver and improve its function."], recipe: {name: "Gynostemma Tea", instructions: "Add 1 tablespoon of dried gynostemma leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        bacopa: { name: "Bacopa Monnieri", use: "Protects Blood Vessels", description: "Bacopa has antioxidant properties that can protect blood vessels from damage and improve blood flow, especially to the brain. Its nootropic effects are well-known, as it can improve memory and cognitive function. It is a slow-acting herb that requires consistent use for several weeks to see a benefit.", howto: "Typically taken as a daily supplement in capsule form. It is a key herb in Ayurvedic medicine for cognitive enhancement.", color: 0x968c8b, model: 'leafy-ground', url: "https://placehold.co/200x200/968c8b/ffffff?text=Bacopa", moreBenefitsAndRecipe: {benefits: ["Enhances Memory and Cognition: It can help improve memory and learning.", "Reduces Stress: As an adaptogen, it helps the body cope with physical and mental stress.", "Reduces Anxiety: Its calming effects can help with anxiety and restlessness.", "Supports Liver Health: It can help detoxify the liver and improve its function."], recipe: {name: "Bacopa Tea", instructions: "Add 1 teaspoon of dried bacopa leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        horsechestnut: { name: "Horse Chestnut", use: "Strengthens Veins", description: "The seeds of the horse chestnut tree are used to improve venous circulation and reduce symptoms of varicose veins and chronic venous insufficiency. Its primary compound, aescin, helps to tone the walls of veins and capillaries, reducing swelling and pain. It is a powerful but potentially toxic plant.", howto: "Used in standardized extracts or topical gels. Do not ingest the raw seeds.", color: 0x8d6e63, model: 'nut', url: "https://placehold.co/200x200/8d6e63/ffffff?text=Horse+Chestnut", moreBenefitsAndRecipe: {benefits: ["Reduces Swelling: It can help reduce swelling and inflammation in the legs.", "Relieves Hemorrhoids: It can be used topically to relieve pain and swelling from hemorrhoids.", "Supports Vein Health: It helps to strengthen the walls of veins and capillaries.", "Pain Relief: It can help with pain and inflammation in muscles and joints."], recipe: {name: "Horse Chestnut Salve", instructions: "Infuse dried horse chestnut in a carrier oil (like olive oil) for several weeks. Strain the oil and melt with beeswax to create a salve. Use topically for varicose veins."}}},
+                        butchersbroom: { name: "Butcher's Broom", use: "Tones Blood Vessels", description: "This herb is used to strengthen and tone veins, making it effective for improving circulation and treating hemorrhoids and varicose veins. It helps to reduce inflammation and swelling. It is often used in combination with other herbs for circulatory support.", howto: "Most often taken in capsule or tincture form. It is a powerful herb that should be used with caution.", color: 0x5a7a58, model: 'bushy', url: "https://placehold.co/200x200/5a7a58/ffffff?text=Butcher's+Broom", moreBenefitsAndRecipe: {benefits: ["Supports Vein Health: It helps to strengthen the walls of veins and capillaries.", "Reduces Swelling: It can help reduce swelling and inflammation in the legs.", "Relieves Hemorrhoids: It can be used topically to relieve pain and swelling from hemorrhoids.", "Diuretic: It can help to increase urination and flush toxins from the body."], recipe: {name: "Butcher's Broom Tincture", instructions: "Place dried butcher's broom root in a glass jar. Cover with alcohol (like vodka) and let it sit for 4-6 weeks, shaking daily. Strain and store in a dark bottle. Take a few drops as needed."}}},
+                        bilberry: { name: "Bilberry", use: "Strengthens Capillaries", description: "Bilberry is rich in antioxidants that can strengthen the walls of capillaries and improve circulation, particularly to the eyes. It is also known to help with night vision. It is a gentle but powerful herb that is a great tonic for the eyes and the entire circulatory system.", howto: "Eaten fresh or taken as a supplement. It is often found in capsules for eye health.", color: 0x4b0082, model: 'berry-bush', url: "https://placehold.co/200x200/4b0082/ffffff?text=Bilberry", moreBenefitsAndRecipe: {benefits: ["Supports Eye Health: It can help with a range of eye issues from night vision to cataracts.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Vein Health: It helps to strengthen the walls of veins and capillaries."], recipe: {name: "Bilberry Smoothie", instructions: "In a blender, combine 1 cup of frozen bilberries, 1 frozen banana, 1 cup of milk (dairy or plant-based), and a spoonful of honey. Blend until smooth and creamy."}}},
+                        policosanol: { name: "Policosanol", use: "Lowers Cholesterol", description: "A waxy substance derived from sugarcane, policosanol is used to help lower LDL (bad) cholesterol levels. It is a natural supplement that can be a great alternative to statin drugs. It also helps to prevent blood clots and improve overall circulation.", howto: "Typically taken as a supplement. It is a natural product that is well-tolerated by most people.", color: 0xd9e0e8, model: 'bushy', url: "https://placehold.co/200x200/d9e0e8/ffffff?text=Policosanol", moreBenefitsAndRecipe: {benefits: ["Prevents Blood Clots: It can help to prevent blood clots and improve overall circulation.", "Supports Brain Health: It can help to improve blood flow to the brain.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage."], recipe: {name: "Policosanol Supplement", instructions: "Policosanol is best taken as a supplement in capsule form. It is a natural product that is well-tolerated by most people."}}},
+                        grapeseed: { name: "Grape Seed Extract", use: "Powerful Antioxidant for Vessels", description: "Rich in flavonoids and antioxidants, grape seed extract helps protect blood vessels from damage and supports healthy circulation. It is a powerful antioxidant that can help protect the entire body from oxidative stress. It is also known to help with skin health and inflammation.", howto: "Taken in capsule form. It is a great supplement for overall health and well-being.", color: 0x800080, model: 'berry-cluster', url: "https://placehold.co/200x200/800080/ffffff?text=Grape+Seed", moreBenefitsAndRecipe: {benefits: ["Supports Skin Health: Its powerful antioxidants can help improve skin elasticity and reduce signs of aging.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Eye Health: It can help to improve blood flow to the eyes and protect them from damage.", "Anticancer Properties: Research suggests that it may help inhibit the growth of certain cancer cells."], recipe: {name: "Grape Seed Tea", instructions: "Add 1 tablespoon of dried grape seeds to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        hawthornleaf: { name: "Hawthorn Leaf & Flower", use: "Heart Tonic", description: "In addition to the berries, the leaves and flowers of the hawthorn plant are also used to improve heart function and circulation. They are considered a powerful heart tonic that can help with a range of cardiovascular issues. It is a slow-acting herb that requires consistent use to see a benefit.", howto: "Brewed as a tea or taken as a tincture. It is often combined with other herbs for a more powerful effect.", color: 0x80b380, model: 'flower-cluster', url: "https://placehold.co/200x200/80b380/ffffff?text=Hawthorn+Leaf", moreBenefitsAndRecipe: {benefits: ["Reduces Blood Pressure: It can help to lower blood pressure and reduce cholesterol levels.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the heart from damage.", "Eases Anxiety: It has a calming effect that can help with anxiety and heart palpitations.", "Diuretic: It can help to reduce fluid retention and swelling."], recipe: {name: "Hawthorn Leaf Tea", instructions: "Add 1 tablespoon of dried hawthorn leaves and flowers to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        olivel: { name: "Olive Leaf", use: "Supports Healthy Blood Pressure", description: "Compounds in olive leaf can help relax blood vessels and lower blood pressure, promoting overall heart health. It has powerful antimicrobial and antiviral properties that can help fight infections. It is a great herb for supporting the immune system and cardiovascular health.", howto: "Brewed as a tea or taken as a supplement. It has a slightly bitter taste but is a powerful tonic for the entire body.", color: 0x6b8e23, model: 'leaf-cluster', url: "https://placehold.co/200x200/6b8e23/ffffff?text=Olive+Leaf", moreBenefitsAndRecipe: {benefits: ["Boosts Immunity: Its powerful antimicrobial properties can help fight off colds and flu.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Digestive Health: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Olive Leaf Tea", instructions: "Add 1 tablespoon of dried olive leaves to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        coq10: { name: "Coenzyme Q10", use: "Essential for Heart Energy", description: "While not an herb, this compound is vital for cellular energy production, especially in the heart muscle, and is often supplemented for cardiovascular support. It is a powerful antioxidant that protects the body from oxidative stress. It is often recommended for those taking statin drugs, which can deplete CoQ10 levels.", howto: "Taken in capsule form, often alongside hawthorn. It is a great supplement for overall health and well-being.", color: 0xffd700, model: 'pill', url: "https://placehold.co/200x200/ffd700/ffffff?text=Coenzyme+Q10", moreBenefitsAndRecipe: {benefits: ["Antioxidant: It is a powerful antioxidant that protects the body from oxidative stress.", "Fights Fatigue: It can help improve physical and mental stamina and reduce fatigue.", "Supports Brain Health: It can help to improve blood flow to the brain and protect it from damage.", "Supports Immune System: It can help stimulate the immune system and protect against illness."], recipe: {name: "Coenzyme Q10 Smoothie", instructions: "Coenzyme Q10 is best taken as a supplement in capsule form. It is a great supplement for overall health and well-being. Can be taken with food for better absorption."}}},
+                    }
+                },
+                firstaid: {
+                    name: "The First-Aid Garden",
+                    description: "Nature's medicine cabinet. These plants are useful for treating minor scrapes, cuts, burns, and bruises, offering soothing and healing properties.",
+                    image: "https://placehold.co/150x150/fab005/ffffff?text=Skin+and+Healing",
+                    plants: {
+                        aloe: { name: "Aloe Vera", use: "Soothes Burns and Cuts", description: "The gel inside the aloe leaf is incredibly cooling and anti-inflammatory, providing immediate relief for sunburns and minor skin irritations. It promotes the healing of skin tissue and has a moisturizing effect. It is a staple in many first-aid kits and is a very versatile plant.", howto: "Break off a leaf and apply the fresh gel directly to the affected skin area. Can also be found in many topical creams and gels.", color: 0x34d399, model: 'succulent', url: "https://placehold.co/200x200/34d399/ffffff?text=Aloe+Vera", moreBenefitsAndRecipe: {benefits: ["Heals Skin: It can help to heal a range of skin issues from acne to eczema.", "Moisturizes Skin: It is a great moisturizer for dry skin and can help with a range of skin issues.", "Supports Digestive Health: The juice can help with indigestion and gut imbalances.", "Boosts Immunity: It can help to stimulate the immune system and protect against illness."], recipe: {name: "Aloe Vera Drink", instructions: "Scoop out the gel from an aloe leaf. Blend with water and a spoonful of honey. Drink for a soothing and hydrating effect."}}},
+                        calendula: { name: "Calendula", use: "Heals Skin Inflammation", description: "Also known as pot marigold, calendula flowers have antifungal and anti-inflammatory properties that promote the healing of wounds and soothe irritated skin. It helps to speed up the healing process and is a great herb for a range of skin issues from diaper rash to eczema. It is also a powerful lymphatic tonic.", howto: "Used in creams, salves, or oils. A tea can also be used as a skin rinse. It is a gentle and safe herb for all ages.", color: 0xfb923c, model: 'flower-stem', url: "https://placehold.co/200x200/fb923c/ffffff?text=Calendula", moreBenefitsAndRecipe: {benefits: ["Antifungal: It is effective against a range of fungal infections.", "Soothes Rashes: It can help with a range of skin issues from diaper rash to eczema.", "Supports Lymphatic System: It is a powerful lymphatic tonic that helps to clear toxins from the body.", "Wound Healing: It can help promote wound healing and reduce scarring."], recipe: {name: "Calendula Salve", instructions: "Infuse dried calendula flowers in a carrier oil (like olive oil) for several weeks. Strain the oil and melt with beeswax to create a salve. Use topically for skin issues."}}},
+                        arnica: { name: "Arnica", use: "Reduces Bruises and Muscle Aches", description: "Arnica is a popular homeopathic remedy for reducing swelling, bruising, and pain from minor injuries and muscle soreness. It is a powerful anti-inflammatory that helps to reduce swelling and pain. It is a great herb for sprains, strains, and contusions.", howto: "Apply as a gel or cream to the skin. Should not be taken internally or used on broken skin. A topical salve is a great way to use it for bruises.", color: 0xfab005, model: 'flower-stem', url: "https://placehold.co/200x200/fab005/ffffff?text=Arnica", moreBenefitsAndRecipe: {benefits: ["Pain Relief: It can help with a range of pain issues from muscle aches to joint pain.", "Reduces Swelling: It has anti-inflammatory properties that can help with swelling and inflammation.", "Relieves Muscle Soreness: It can be used topically to relieve muscle soreness after exercise.", "Supports Vein Health: It can help with a range of vein issues from varicose veins to hemorrhoids."], recipe: {name: "Arnica Infused Oil", instructions: "Infuse dried arnica flowers in a carrier oil (like olive oil) for several weeks. Strain the oil and store in a dark bottle. Use topically for bruises and muscle aches."}}},
+                        plantain: { name: "Plantain", use: "Soothes Insect Bites and Stings", description: "The leaves of this common 'weed' are a powerful natural remedy for relieving the itch and swelling from bug bites, bee stings, and poison ivy. It is a demulcent that soothes irritated skin and a powerful anti-inflammatory. It is a very common plant that can be found almost anywhere.", howto: "Chew a fresh leaf into a pulp and apply directly to the affected area. It is a great first-aid remedy to have on hand.", color: 0x5a8a58, model: 'leafy-ground', url: "https://placehold.co/200x200/5a8a58/ffffff?text=Plantain", moreBenefitsAndRecipe: {benefits: ["Wound Healing: It can help promote wound healing and reduce scarring.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Antimicrobial: It has compounds that can help fight off infections.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Plantain Salve", instructions: "Infuse fresh plantain leaves in a carrier oil (like olive oil) for several weeks. Strain the oil and melt with beeswax to create a salve. Use topically for skin issues."}}},
+                        yarrow: { name: "Yarrow", use: "Stops Bleeding", description: "Yarrow is known as a 'staunching herb' for its ability to stop minor bleeding from cuts and scrapes when applied directly to the wound. It is a powerful astringent that helps to constrict blood vessels and promote clotting. It is also a diaphoretic, helping to break fevers.", howto: "Crush fresh leaves and apply to a minor wound. Do not use on large or deep cuts. A tea can also be used to help with fevers.", color: 0xffffff, model: 'flower-cluster', url: "https://placehold.co/200x200/ffffff/000000?text=Yarrow", moreBenefitsAndRecipe: {benefits: ["Reduces Fevers: Its diaphoretic properties can help the body cool down during a fever.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Vein Health: It can help with a range of vein issues from varicose veins to hemorrhoids.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Yarrow Tea", instructions: "Add 1 tablespoon of dried yarrow flowers to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm. Can be combined with honey and lemon."}}},
+                        witchhazel: { name: "Witch Hazel", use: "Astringent for Swelling and Bruises", description: "Witch hazel is a powerful astringent that can reduce swelling, soothe inflammation, and tighten skin, making it great for bruises and hemorrhoids. It is a gentle but powerful herb that is a great tonic for the skin. It is also a natural cleanser that can be used to treat acne and other skin issues.", howto: "Use as a topical liquid on a cotton pad to dab on the affected area. Can be found in many commercial products.", color: 0x9370db, model: 'bushy', url: "https://placehold.co/200x200/9370db/ffffff?text=Witch+Hazel", moreBenefitsAndRecipe: {benefits: ["Soothes Hemorrhoids: It can be used topically to relieve pain and swelling from hemorrhoids.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Skin Health: It is a great toner for the skin and can help with acne and other skin issues.", "Antimicrobial: It has compounds that can help fight off infections."], recipe: {name: "Witch Hazel Toner", instructions: "Fill a small spray bottle with witch hazel extract. Spritz on a clean face after washing to tone and cleanse the skin. Can also be used to soothe bug bites."}}},
+                        teatree: { name: "Tea Tree", use: "Antiseptic for Cuts and Scrapes", description: "Tea tree oil is a potent antiseptic, antifungal, and antibacterial agent, perfect for cleaning minor cuts and preventing infection. It is a powerful but intense oil that should be used with caution. It is a great remedy for a range of skin issues from acne to athlete's foot.", howto: "Apply a diluted amount of the essential oil to the affected area. Never ingest tea tree oil.", color: 0x6e6e4a, model: 'bushy', url: "https://placehold.co/200x200/6e6e4a/ffffff?text=Tea+Tree", moreBenefitsAndRecipe: {benefits: ["Fights Acne: It is a popular remedy for treating acne due to its antimicrobial properties.", "Antifungal: It is effective against a range of fungal infections, including athlete's foot.", "Antiseptic: It is a powerful antiseptic for cleaning wounds and preventing infection.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions."], recipe: {name: "Tea Tree Oil Foot Soak", instructions: "Fill a basin with warm water. Add 10-15 drops of tea tree essential oil. Soak your feet for 15-20 minutes. Pat dry and apply a small amount of oil to the affected area."}}},
+                        goldenseal: { name: "Goldenseal", use: "Antimicrobial for Wounds", description: "Goldenseal contains berberine, a compound that helps fight bacteria and viruses, making it a powerful herb for preventing infection in minor cuts. It is a powerful but endangered plant that should be used with caution. It is also a great herb for a range of internal infections.", howto: "Usually taken as a tincture or capsule, but a dilute topical application can be made. Due to its endangered status, sustainably sourced or cultivated goldenseal should be used.", color: 0xf5f5dc, model: 'root', url: "https://placehold.co/200x200/f5f5dc/ffffff?text=Goldenseal", moreBenefitsAndRecipe: {benefits: ["Supports Digestive Health: It can help with a range of digestive issues from indigestion to gut imbalances.", "Skin Health: It can be used topically to treat skin infections and wounds.", "Urinary Tract Health: It can help fight infections in the urinary tract.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions."], recipe: {name: "Goldenseal Tincture", instructions: "Goldenseal is a very potent herb and is best used as a tincture. The tincture is made by soaking the plant in alcohol for several weeks. Take a few drops as needed for immune support."}}},
+                        echinacea: { name: "Echinacea", use: "Aids Wound Healing", description: "Echinacea has immune-stimulating properties that can help the body heal from minor wounds and infections more quickly. It is a great herb for supporting the immune system and is often used to fight off colds and flu. It can be used both internally and topically.", howto: "A diluted tincture can be applied to the skin or taken internally. It is best to use it at the first sign of illness.", color: 0x9c4221, model: 'flower-stem', url: "https://placehold.co/200x200/9c4221/ffffff?text=Echinacea", moreBenefitsAndRecipe: {benefits: ["Boosts Immunity: It can help stimulate the immune system and protect against illness.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Antimicrobial: It has compounds that can help fight off infections.", "Soothes Sore Throats: It can be used as a gargle to soothe a sore throat."], recipe: {name: "Echinacea Tea", instructions: "Add 1 tablespoon of dried echinacea root to a mug. Pour hot water over it and let it steep for 10-15 minutes. Strain and drink warm."}}},
+                        comfrey: { name: "Comfrey", use: "Accelerates Healing of Bones and Tissues", description: "Comfrey is a powerful vulnerary herb, meaning it promotes the rapid healing of tissues, bones, and bruises. It is a powerful herb that should be used with caution, as it contains pyrrolizidine alkaloids that can be toxic to the liver if taken internally. Do not use on broken skin.", howto: "Used topically as a poultice, salve, or compress. Do not ingest.", color: 0x6b8e23, model: 'leafy-ground', url: "https://placehold.co/200x200/6b8e23/ffffff?text=Comfrey", moreBenefitsAndRecipe: {benefits: ["Pain Relief: It can help with a range of pain issues from muscle aches to joint pain.", "Reduces Inflammation: It has anti-inflammatory properties that can help with a range of conditions.", "Supports Bone Health: It can help with a range of bone issues from fractures to sprains.", "Wound Healing: It can help promote wound healing and reduce scarring."], recipe: {name: "Comfrey Poultice", instructions: "Crush fresh comfrey leaves into a pulp. Apply the pulp directly to the affected area. Cover with a clean cloth and let it sit for 30 minutes. Do not use on broken skin."}}},
+                        stjohnswort: { name: "St. John's Wort", use: "Soothes Nerve Pain", description: "Infused oil from St. John's Wort flowers is a great remedy for nerve-related pain from injuries like sprains, burns, and sciatica. It is a powerful anti-inflammatory that can help to reduce pain and swelling. It can be a great alternative to over-the-counter pain relievers.", howto: "Apply the infused oil topically to the affected area. Do not use on broken skin. Avoid sun exposure while using topically.", color: 0xffd700, model: 'bushy', url: "https://placehold.co/200x200/ffd700/ffffff?text=St.+John's+Wort", moreBenefitsAndRecipe: {benefits: ["Improves Mood: It can help with mild to moderate depression and seasonal affective disorder.", "Antiviral: It has been shown to have antiviral properties.", "Wound Healing: It can be used topically to promote wound healing.", "Anti-inflammatory: It has anti-inflammatory properties that can help with pain and swelling."], recipe: {name: "St. John's Wort Infused Oil", instructions: "Fill a glass jar with fresh St. John's Wort flowers. Cover completely with olive oil. Seal the jar and let it sit in a sunny window for 4-6 weeks. Strain and store in a dark bottle. Use topically for nerve pain."}}},
+                        chamomile: { name: "Chamomile", use: "Calms Skin Irritation", description: "A mild anti-inflammatory, chamomile tea can be used as a rinse or compress to soothe skin rashes, bug bites, and irritation. It has a calming effect on the nervous system, which can help with stress-related skin issues. It is a gentle and safe herb for all ages.", howto: "Brew a strong tea and use it as a topical wash once cooled. Can also be added to a bath to soothe irritated skin.", color: 0xfef08a, model: 'flower-stem', url: "https://placehold.co/200x200/fef08a/ffffff?text=Chamomile", moreBenefitsAndRecipe: {benefits: ["Soothes Skin: A cooled chamomile tea can be used as a compress or wash to soothe skin irritations and rashes.", "Digestive Aid: It can help with indigestion and stomach cramps.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Wound Healing: It can be used topically to help with minor wounds."], recipe: {name: "Calming Chamomile-Lavender Tea", instructions: "Add 1 tablespoon of dried chamomile flowers and 1 teaspoon of dried lavender buds to a tea infuser. Place in a mug and fill with hot water. Steep for 5-10 minutes. Sweeten with honey if desired."}}},
+                        marshmallow: { name: "Marshmallow Root", use: "Relieves Sunburns", description: "The mucilage in marshmallow root can be used as a cooling and soothing topical compress to ease the pain and redness of sunburns. It is a powerful demulcent that coats and protects irritated skin. It is also a great herb for a range of internal issues from coughs to digestive problems.", howto: "Soak the dried root in cold water to make a soothing liquid for a compress. Can also be found in many topical creams.", color: 0xd3b8ae, model: 'root', url: "https://placehold.co/200x200/d3b8ae/ffffff?text=Marshmallow+Root", moreBenefitsAndRecipe: {benefits: ["Soothes Sunburns: A cooling compress of marshmallow root can ease the pain and redness of sunburns.", "Relieves Coughs: Its demulcent properties make it a great remedy for dry, irritated coughs.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances.", "Supports Urinary Tract Health: It has a soothing effect on the urinary tract and can help with inflammation."], recipe: {name: "Marshmallow Root Cold Infusion", instructions: "Place 2-3 tablespoons of dried marshmallow root in a glass jar. Add 4 cups of cold water and stir well. Cover and let sit overnight (8 hours). Strain and sip the liquid throughout the day."}}},
+                        thyme: { name: "Thyme", use: "Antiseptic for Minor Cuts", description: "Thyme's antiseptic and antimicrobial properties make it a useful herb for cleaning and disinfecting minor cuts and scrapes. It is a powerful herb that can help fight a range of infections. It is also a great herb for respiratory issues.", howto: "Use a strong infusion of thyme as a topical rinse for wounds. Can also be used in steam inhalations for respiratory support.", color: 0xa78bfa, model: 'bushy', url: "https://placehold.co/200x200/a78bfa/ffffff?text=Thyme", moreBenefitsAndRecipe: {benefits: ["Soothes Coughs: It can help with a range of respiratory issues from coughs to bronchitis.", "Antifungal: It is effective against a range of fungal infections, including on the skin.", "Pain Relief: It can help with muscle aches and joint pain.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Thyme Infused Oil", instructions: "Fill a glass jar with fresh thyme sprigs. Cover completely with olive oil. Seal the jar and let it sit in a cool, dark place for 2-4 weeks. Strain and store. Use topically for muscle aches."}}},
+                        rosemary: { name: "Rosemary", use: "Anti-inflammatory for Sore Muscles", description: "Rosemary oil, when applied topically, can help stimulate circulation and reduce inflammation in sore muscles and joints. It has a warming effect that can help with muscle pain and stiffness. It is also a great herb for stimulating memory and focus.", howto: "Create an infused oil or salve to rub on sore areas. Can also be used in aromatherapy to improve memory and focus.", color: 0x5a7a58, model: 'bushy', url: "https://placehold.co/200x200/5a7a58/ffffff?text=Rosemary", moreBenefitsAndRecipe: {benefits: ["Improves Memory: The scent and compounds in rosemary are known to boost memory and concentration.", "Antioxidant Power: It is rich in antioxidants that protect the body from free radical damage.", "Stimulates Hair Growth: Rosemary oil is a popular remedy for stimulating blood flow to the scalp and promoting hair growth.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Rosemary Infused Oil", instructions: "Fill a glass jar with fresh rosemary sprigs. Cover completely with olive oil. Seal the jar and let it sit in a cool, dark place for 2-4 weeks. Strain and store. Use topically for muscle aches."}}},
+                        lavender: { name: "Lavender", use: "Soothes Minor Burns and Irritation", description: "Lavender essential oil is renowned for its ability to soothe minor burns, reduce pain, and promote healing of the skin. It is a powerful anti-inflammatory and antiseptic. It is a very safe and gentle oil that is great for a range of skin issues.", howto: "Dilute the essential oil in a carrier oil and apply to the burn. Can also be used in aromatherapy for relaxation.", color: 0xc4b5fd, model: 'flower-stem', url: "https://placehold.co/200x200/c4b5fd/ffffff?text=Lavender", moreBenefitsAndRecipe: {benefits: ["Promotes Sleep: Its calming properties make it a popular natural remedy for insomnia and restlessness.", "Reduces Anxiety: Drinking lavender tea can help reduce anxiety and promote a sense of well-being.", "Antifungal: It is effective against a range of fungal infections, including on the skin.", "Pain Relief: It can help with muscle aches and pain."], recipe: {name: "Lavender Lemonade", instructions: "In a saucepan, combine 1 cup of sugar, 1 cup of water, and a handful of fresh lavender buds. Simmer until the sugar dissolves. Let cool. Strain and add to 4 cups of fresh-squeezed lemon juice and 4 cups of cold water. Serve over ice."}}},
+                        sage: { name: "Sage", use: "Astringent for Wounds", description: "Sage has astringent properties that can help tighten tissues and stop minor bleeding, making it useful for small cuts. It is a powerful antiseptic that can help fight a range of infections. It is also a great herb for a range of digestive issues.", howto: "Use a strong sage tea as a wash for the wound. Can also be used as a gargle for a sore throat.", color: 0x8d9e84, model: 'bushy', url: "https://placehold.co/200x200/8d9e84/ffffff?text=Sage", moreBenefitsAndRecipe: {benefits: ["Soothes Sore Throats: Gargling with sage tea is a traditional remedy for sore throats and tonsillitis.", "Menopause Support: It is well-known for reducing hot flashes and night sweats.", "Cognitive Function: Research suggests that sage can improve memory and cognitive performance.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances."], recipe: {name: "Sage & Onion Stuffing", instructions: "Sauté chopped onions and fresh sage leaves in butter until soft. Add breadcrumbs, chicken or vegetable broth, salt, and pepper. Mix well and bake until golden brown. This classic recipe aids digestion of heavy meals."}}},
+                        mullein: { name: "Mullein", use: "Soothes Earaches", description: "Mullein-infused oil is a popular remedy for soothing earaches and inflammation, particularly in children. It has a calming, anti-inflammatory effect that can help to reduce pain and swelling. It is a great herb for a range of respiratory issues as well.", howto: "Warm the infused oil and place a few drops in the ear. Do not use if the eardrum is perforated.", color: 0xfde047, model: 'tall-stem', url: "https://placehold.co/200x200/fde047/ffffff?text=Mullein", moreBenefitsAndRecipe: {benefits: ["Helps with Lung Issues: It acts as an expectorant, helping to clear phlegm from the lungs and chest.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions.", "Diuretic: It can help to increase urination and flush toxins from the body.", "Wound Healing: The leaves can be used topically to help with minor wounds."], recipe: {name: "Mullein Oil", instructions: "Fill a glass jar with mullein flowers and cover with olive oil. Seal the jar and let it sit in a sunny window for 2-4 weeks. Strain and store in a dark bottle. Use for earaches."}}},
+                        oregon: { name: "Oregon Grape", use: "Antimicrobial for Skin Issues", description: "The root of Oregon Grape contains berberine, which has strong antimicrobial properties for treating skin infections like eczema and psoriasis. It is a powerful herb that can help with a range of infections. It is also a great herb for liver health and digestion.", howto: "Used topically in salves or lotions. Can also be taken internally. It is a powerful but potentially toxic plant.", color: 0x8d6e4b, model: 'bushy', url: "https://placehold.co/200x200/8d6e4b/ffffff?text=Oregon+Grape", moreBenefitsAndRecipe: {benefits: ["Supports Liver Health: It can help detoxify the liver and improve its function.", "Digestive Aid: It can help with a range of digestive issues from indigestion to gut imbalances.", "Antimicrobial: It has compounds that can help fight off infections.", "Anti-inflammatory: It has anti-inflammatory properties that can help with a range of conditions."], recipe: {name: "Oregon Grape Tincture", instructions: "Place dried Oregon grape root in a glass jar. Cover with alcohol (like vodka) and let it sit for 4-6 weeks, shaking daily. Strain and store in a dark bottle. Take a few drops as needed."}}},
+                        usnea: { name: "Usnea", use: "Antibacterial for Wounds", description: "This lichen has potent antibacterial properties that make it a powerful natural antibiotic for treating minor wounds and skin infections. It is a powerful herb that can help fight a range of infections. It is a great herb for a range of respiratory issues as well.", howto: "Used as a tincture or can be applied topically in a salve. It is a great herb for a range of internal and external infections.", color: 0x8b8b8b, model: 'lichen', url: "https://placehold.co/200x200/8b8b8b/ffffff?text=Usnea", moreBenefitsAndRecipe: {benefits: ["Supports Respiratory Health: It can help with a range of respiratory issues from coughs to bronchitis.", "Antifungal: It is effective against a range of fungal infections, including on the skin.", "Pain Relief: It can help with muscle aches and pain.", "Antioxidant Rich: It is packed with powerful antioxidants that protect the body from free radical damage."], recipe: {name: "Usnea Tincture", instructions: "Place dried usnea lichen in a glass jar. Cover with alcohol (like vodka) and let it sit for 4-6 weeks, shaking daily. Strain and store in a dark bottle. Take a few drops as needed for immune support."}}},
+                    }
+                }
+            };
+
+            const welcomePage = document.getElementById('welcome-page');
+            const startButton = document.getElementById('start-button');
+            const atlasView = document.getElementById('atlas-view');
+            const gardenView = document.getElementById('garden-view');
+            const backButton = document.getElementById('back-to-atlas');
+            const zoomInButton = document.getElementById('zoom-in');
+            const zoomOutButton = document.getElementById('zoom-out');
+            const bodyParts = document.querySelectorAll('.body-part');
+            const tooltip = document.getElementById('tooltip');
+            const infoPanel = document.getElementById('info-panel');
+            const panelContent = document.getElementById('panel-content');
+            const plantDetailsDiv = document.getElementById('plant-details');
+            const plantHoverCard = document.getElementById('plant-hover-card');
+            const plantHoverImage = document.getElementById('plant-hover-image');
+            const plantHoverName = document.getElementById('plant-hover-name');
+            const exploreMoreButton = document.getElementById('explore-more-button');
+            const moreDetailsContainer = document.getElementById('more-details-container');
+            const moreBenefitsList = document.querySelector('#more-benefits ul');
+            const plantRecipe = document.querySelector('#plant-recipe p');
+            const plantInfoImage = document.getElementById('plant-info-image');
+            
+            let scene, camera, renderer, raycaster, mouse;
+            let INTERSECTED;
+            let plantObjects = [];
+            let currentGardenKey = null;
+            let currentPlantKey = null;
+            const targetPosition = new THREE.Vector3();
+            const targetLookAt = new THREE.Vector3();
+            let isCameraAnimating = false;
+            let isZoomedIn = false;
+            
+            const DEFAULT_CAMERA_POS = new THREE.Vector3(0, 5, 15);
+            const ZOOMED_CAMERA_POS = new THREE.Vector3(0, 2, 5);
+
+            function createInstancedGrass(count, color) {
+                const bladeGeometry = new THREE.PlaneGeometry(0.1, 0.22);
+                bladeGeometry.translate(0, 0.11, 0);
+                const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x559e51, side: THREE.DoubleSide });
+                
+                const instancedMesh = new THREE.InstancedMesh(bladeGeometry, grassMaterial, count);
+                instancedMesh.castShadow = true;
+                instancedMesh.receiveShadow = true;
+
+                const dummy = new THREE.Object3D();
+                for (let i = 0; i < count; i++) {
+                    dummy.position.x = Math.random() * 20 - 10;
+                    dummy.position.z = Math.random() * 20 - 10;
+                    dummy.rotation.y = Math.random() * Math.PI * 2;
+                    dummy.scale.setScalar(0.2 + Math.random() * 0.3);
+                    dummy.updateMatrix();
+                    instancedMesh.setMatrixAt(i, dummy.matrix);
+                }
+                
+                instancedMesh.instanceMatrix.needsUpdate = true;
+                return instancedMesh;
+            }
+            
+            function initThree() {
+                const container = document.getElementById('garden-canvas-container');
+                scene = new THREE.Scene();
+                
+                const loader = new THREE.CubeTextureLoader();
+                const skyboxTexture = loader.load([
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4',
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4',
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4',
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4',
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4',
+                    'https://placehold.co/1024x1024/a8d8e6/4682b4'
+                ]);
+                scene.background = skyboxTexture;
+                scene.fog = new THREE.Fog(0xd7f0e3, 10, 40);
+
+                camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+                camera.position.set(0, 5, 15);
+                camera.lookAt(0, 0, 0);
+                targetPosition.copy(camera.position);
+                targetLookAt.set(0,0,0);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.shadowMap.enabled = true;
+                container.appendChild(renderer.domElement);
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+                directionalLight.position.set(10, 15, 5);
+                directionalLight.castShadow = true;
+                scene.add(directionalLight);
+                
+                const hemiLight = new THREE.HemisphereLight(0xb1e1ff, 0xb97a20, 0.5);
+                scene.add(hemiLight);
+
+                const groundGeometry = new THREE.PlaneGeometry(30, 30);
+                const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x385f3c, roughness: 1, metalness: 0 });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                scene.add(ground);
+                
+                const grass = createInstancedGrass(50000, 0x559e51);
+                scene.add(grass);
+
+                raycaster = new THREE.Raycaster();
+                mouse = new THREE.Vector2();
+
+                window.addEventListener('resize', onWindowResize, false);
+                container.addEventListener('mousemove', onMouseMove, false);
+                container.addEventListener('click', onMouseClick, false);
+
+                animate();
+            }
+
+            function createPlantModel(plantKey, plantData) {
+                const group = new THREE.Group();
+                group.userData = { id: plantKey, ...plantData };
+                
+                const material = new THREE.MeshLambertMaterial({ color: plantData.color });
+
+                switch (plantData.model) {
+                    case 'leafy-stem':
+                        const stemGeoLS = new THREE.CylinderGeometry(0.05, 0.05, 0.7, 8);
+                        const stemLS = new THREE.Mesh(stemGeoLS, new THREE.MeshLambertMaterial({color: 0x4d7c0f}));
+                        stemLS.scale.y = 1.8;
+                        stemLS.castShadow = true;
+                        group.add(stemLS);
+                        for (let i = 0; i < 8; i++) {
+                           const leafGeo = new THREE.SphereGeometry(0.18, 8, 6);
+                           const leaf = new THREE.Mesh(leafGeo, material);
+                           leaf.position.y = 0.35 + i * 0.12 * 1.8;
+                           leaf.position.x = (i % 2 === 0 ? 1 : -1) * 0.18;
+                           leaf.castShadow = true;
+                           group.add(leaf);
+                        }
+                        break;
+                    case 'rhizome':
+                        for(let i=0; i<5; i++){
+                           const segmentGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+                           const segment = new THREE.Mesh(segmentGeo, material);
+                           segment.position.set(Math.random()*0.9-0.45, 0.15, Math.random()*0.9-0.45);
+                           segment.rotation.y = Math.random() * Math.PI;
+                           segment.scale.y = 1.8;
+                           segment.castShadow = true;
+                           group.add(segment);
+                        }
+                        break;
+                    case 'flower-stem':
+                        const stemGeoFS = new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8);
+                        const stemFS = new THREE.Mesh(stemGeoFS, new THREE.MeshLambertMaterial({color: 0x4d7c0f}));
+                        stemFS.scale.y = 1.8;
+                        stemFS.position.y = 0.45 * 1.8;
+                        stemFS.castShadow = true;
+                        group.add(stemFS);
+                        const centerGeo = new THREE.SphereGeometry(0.15, 16, 16);
+                        const center = new THREE.Mesh(centerGeo, new THREE.MeshLambertMaterial({color: 0xfbbf24}));
+                        center.position.y = 1 * 1.8;
+                        center.castShadow = true;
+                        group.add(center);
+                        for(let i=0; i<12; i++){
+                            const petalGeo = new THREE.BoxGeometry(0.4, 0.05, 0.1);
+                            const petal = new THREE.Mesh(petalGeo, material);
+                            petal.position.y = 1 * 1.8;
+                            petal.rotation.y = (i/12) * Math.PI * 2;
+                            petal.translateZ(0.2);
+                            petal.castShadow = true;
+                            group.add(petal);
+                        }
+                        break;
+                    case 'tall-stem':
+                         const stemGeoTS = new THREE.CylinderGeometry(0.04, 0.04, 1.2, 8);
+                         const stemTS = new THREE.Mesh(stemGeoTS, new THREE.MeshLambertMaterial({color: 0x4d7c0f}));
+                         stemTS.scale.y = 1.8;
+                         stemTS.position.y = 0.6 * 1.8;
+                         stemTS.castShadow = true;
+                         group.add(stemTS);
+                         for(let i=0; i<50; i++){
+                             const seedGeo = new THREE.SphereGeometry(0.05, 5, 5);
+                             const seed = new THREE.Mesh(seedGeo, material);
+                             seed.position.y = 0.6 * 1.8 + Math.random() * 0.6 * 1.8;
+                             seed.castShadow = true;
+                             group.add(seed);
+                         }
+                        break;
+                    case 'leafy-ground':
+                        for(let i=0; i<8; i++){
+                             const leafGeoLG = new THREE.ConeGeometry(0.15, 1.2, 8);
+                             const leafLG = new THREE.Mesh(leafGeoLG, material);
+                             leafLG.position.y = 0.2 * 1.8;
+                             leafLG.rotation.z = Math.PI/2 + (Math.random()-0.5);
+                             leafLG.rotation.y = (i/8) * Math.PI*2;
+                             leafLG.scale.y = 1.8;
+                             leafLG.castShadow = true;
+                             group.add(leafLG);
+                        }
+                        break;
+                    case 'bark':
+                        const barkGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 16);
+                        const bark = new THREE.Mesh(barkGeo, material);
+                        bark.position.y = 0.4 * 1.8;
+                        bark.scale.y = 1.8;
+                        bark.castShadow = true;
+                        group.add(bark);
+                        break;
+                    case 'root':
+                         const rootGeo = new THREE.CylinderGeometry(0.15, 0.3, 0.7, 8);
+                         const root = new THREE.Mesh(rootGeo, material);
+                         root.scale.y = 1.8;
+                         root.position.y = 0.35 * 1.8;
+                         root.castShadow = true;
+                         group.add(root);
+                         break;
+                    case 'seed-cluster':
+                        for(let i=0; i<25; i++){
+                            const seedGeo = new THREE.SphereGeometry(0.05, 5, 5);
+                            const seed = new THREE.Mesh(seedGeo, material);
+                            seed.position.set(Math.random()*0.35-0.175, Math.random()*0.35 * 1.8, Math.random()*0.35-0.175);
+                            seed.castShadow = true;
+                            group.add(seed);
+                        }
+                        break;
+                    case 'pod-cluster':
+                        for(let i=0; i<15; i++){
+                            const podGeo = new THREE.BoxGeometry(0.08, 0.2, 0.08);
+                            const pod = new THREE.Mesh(podGeo, material);
+                            pod.position.set(Math.random()*0.3-0.15, Math.random()*0.3 * 1.8, Math.random()*0.3-0.15);
+                            pod.castShadow = true;
+                            group.add(pod);
+                        }
+                        break;
+                    case 'bud':
+                        const budGeo = new THREE.SphereGeometry(0.15, 16, 16);
+                        const bud = new THREE.Mesh(budGeo, material);
+                        bud.castShadow = true;
+                        group.add(bud);
+                        break;
+                    case 'bark-roll':
+                        const barkRollGeo = new THREE.TorusGeometry(0.3, 0.05, 8, 16);
+                        const barkRoll = new THREE.Mesh(barkRollGeo, material);
+                        barkRoll.rotation.x = Math.PI/2;
+                        barkRoll.castShadow = true;
+                        group.add(barkRoll);
+                        break;
+                    case 'leaf-cluster':
+                        for(let i=0; i<12; i++){
+                            const leafGeo = new THREE.CircleGeometry(0.18, 12);
+                            const leaf = new THREE.Mesh(leafGeo, material);
+                            leaf.rotation.x = -Math.PI/2;
+                            leaf.position.y = 0.1 * 1.8;
+                            leaf.position.x = Math.random()*0.4-0.2;
+                            leaf.position.z = Math.random()*0.4-0.2;
+                            leaf.castShadow = true;
+                            group.add(leaf);
+                        }
+                        break;
+                    case 'bushy':
+                        const bushGeo = new THREE.DodecahedronGeometry(0.7, 1);
+                        const bush = new THREE.Mesh(bushGeo, material);
+                        bush.scale.y = 1.8;
+                        bush.castShadow = true;
+                        group.add(bush);
+                        break;
+                    case 'vine':
+                        const vineGeo = new THREE.TorusGeometry(0.9, 0.05, 8, 32);
+                        const vine = new THREE.Mesh(vineGeo, material);
+                        vine.rotation.x = Math.PI/2;
+                        vine.scale.y = 1.8;
+                        vine.castShadow = true;
+                        group.add(vine);
+                        break;
+                    case 'berry-bush':
+                        const trunkBB = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
+                        const stemBB = new THREE.Mesh(trunkBB, new THREE.MeshLambertMaterial({color: 0x57534e}));
+                        stemBB.position.y = 0.6 * 1.8;
+                        stemBB.scale.y = 1.8;
+                        stemBB.castShadow = true;
+                        group.add(stemBB);
+                        for(let i=0; i<30; i++){
+                           const berryGeo = new THREE.SphereGeometry(0.08, 8, 8);
+                           const berry = new THREE.Mesh(berryGeo, material);
+                           berry.position.set(Math.random()*1-0.5, 0.6 * 1.8 + Math.random()*0.8 * 1.8, Math.random()*1-0.5);
+                           berry.castShadow = true;
+                           group.add(berry);
+                        }
+                        break;
+                    case 'mushroom':
+                        const stemMushroom = new THREE.CylinderGeometry(0.08, 0.15, 0.6, 8);
+                        const capMushroom = new THREE.ConeGeometry(0.5, 0.35, 16);
+                        const stem = new THREE.Mesh(stemMushroom, new THREE.MeshLambertMaterial({color: 0xd2b48c}));
+                        const cap = new THREE.Mesh(capMushroom, material);
+                        stem.position.y = 0.3 * 1.8;
+                        cap.position.y = 0.67 * 1.8;
+                        stem.scale.y = 1.8;
+                        cap.scale.y = 1.8;
+                        stem.castShadow = true;
+                        cap.castShadow = true;
+                        group.add(stem);
+                        group.add(cap);
+                        break;
+                    case 'fruit-bush':
+                         const trunkFB = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
+                         const trunkFBmesh = new THREE.Mesh(trunkFB, new THREE.MeshLambertMaterial({color: 0x57534e}));
+                         trunkFBmesh.position.y = 0.6 * 1.8;
+                         trunkFBmesh.scale.y = 1.8;
+                         trunkFBmesh.castShadow = true;
+                         group.add(trunkFBmesh);
+                         for(let i=0; i<20; i++){
+                             const fruitGeo = new THREE.SphereGeometry(0.12, 8, 8);
+                             const fruit = new THREE.Mesh(fruitGeo, material);
+                             fruit.position.set(Math.random()*1-0.5, 0.6 * 1.8 + Math.random()*0.8 * 1.8, Math.random()*1-0.5);
+                             fruit.castShadow = true;
+                             group.add(fruit);
+                         }
+                        break;
+                    case 'bulbous':
+                        const bulbGeo = new THREE.IcosahedronGeometry(0.7, 1);
+                        const bulb = new THREE.Mesh(bulbGeo, material);
+                        bulb.castShadow = true;
+                        group.add(bulb);
+                        break;
+                    case 'nut':
+                        const nutGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+                        const nut = new THREE.Mesh(nutGeo, material);
+                        nut.castShadow = true;
+                        group.add(nut);
+                        break;
+                    case 'flower-cluster':
+                        const stemFC = new THREE.CylinderGeometry(0.03, 0.03, 0.8, 8);
+                        const stemFCmesh = new THREE.Mesh(stemFC, new THREE.MeshLambertMaterial({color: 0x4d7c0f}));
+                        stemFCmesh.position.y = 0.4 * 1.8;
+                        stemFCmesh.scale.y = 1.8;
+                        stemFCmesh.castShadow = true;
+                        group.add(stemFCmesh);
+                        for(let i=0; i<12; i++){
+                            const petalGeo = new THREE.BoxGeometry(0.4, 0.05, 0.1);
+                            const petal = new THREE.Mesh(petalGeo, material);
+                            petal.position.y = 0.85 * 1.8;
+                            petal.rotation.y = (i/12) * Math.PI * 2;
+                            petal.translateZ(0.25);
+                            petal.castShadow = true;
+                            group.add(petal);
+                        }
+                        break;
+                    case 'succulent':
+                        for(let i=0; i<8; i++){
+                             const leafGeoS = new THREE.ConeGeometry(0.2, 1.5, 8);
+                             const leafS = new THREE.Mesh(leafGeoS, material);
+                             leafS.position.y = 0.75 * 1.8;
+                             leafS.rotation.z = Math.PI/2 + (Math.random()-0.5);
+                             leafS.rotation.y = (i/8) * Math.PI*2;
+                             leafS.scale.y = 1.8;
+                             leafS.castShadow = true;
+                             group.add(leafS);
+                        }
+                        break;
+                    case 'lichen':
+                        for(let i=0; i<12; i++){
+                            const lichenGeo = new THREE.SphereGeometry(0.18, 8, 8);
+                            const lichen = new THREE.Mesh(lichenGeo, material);
+                            lichen.position.set(Math.random()*0.8-0.4, 0.09 * 1.8, Math.random()*0.8-0.4);
+                            lichen.castShadow = true;
+                            group.add(lichen);
+                        }
+                        break;
+                    case 'pill':
+                        const pillGeo = new THREE.CapsuleGeometry(0.18, 0.4, 4, 8);
+                        const pill = new THREE.Mesh(pillGeo, material);
+                        pill.castShadow = true;
+                        group.add(pill);
+                        break;
+                }
+
+                group.position.y = 0.2;
+                return group;
+            }
+
+            function loadGarden(gardenKey) {
+                while(plantObjects.length > 0){ 
+                    const obj = plantObjects.pop();
+                    scene.remove(obj);
+                }
+                
+                const gardenData = atlasData[gardenKey];
+                currentGardenKey = gardenKey;
+                document.getElementById('garden-name').textContent = gardenData.name;
+                document.getElementById('garden-description').textContent = gardenData.description;
+
+                updatePlantDetails(null);
+
+                const plants = Object.entries(gardenData.plants);
+                const plantsPerRow = Math.ceil(plants.length / 4);
+                const rowZPositions = [-6, -2, 2, 6];
+                const rowWidth = 15;
+
+                plants.forEach(([key, data], index) => {
+                    const rowIndex = Math.floor(index / plantsPerRow);
+                    const plantIndexInRow = index % plantsPerRow;
+                    const z = rowZPositions[rowIndex];
+                    const x = -rowWidth/2 + (plantIndexInRow / (plantsPerRow - 1)) * rowWidth + (Math.random() - 0.5) * 0.5;
+                    
+                    const plantModel = createPlantModel(key, data);
+                    plantModel.position.set(x, 0, z);
+                    scene.add(plantModel);
+                    plantObjects.push(plantModel);
+                });
+                
+                resetCamera();
+            }
+
+            function updatePlantDetails(plantData) {
+                const plantName = document.getElementById('plant-name');
+                const plantUse = document.getElementById('plant-use');
+                const plantDescription = document.getElementById('plant-description');
+                const plantHowto = document.getElementById('plant-howto');
+                
+                moreDetailsContainer.classList.add('hidden');
+                moreBenefitsList.innerHTML = "";
+                plantRecipe.textContent = "";
+
+                if (plantData) {
+                    currentPlantKey = plantData.id;
+                    plantDetailsDiv.style.opacity = '0';
+                    setTimeout(() => {
+                        plantInfoImage.src = plantData.url;
+                        plantInfoImage.alt = plantData.name;
+                        plantName.textContent = plantData.name;
+                        plantUse.textContent = plantData.use;
+                        plantDescription.textContent = plantData.description;
+                        plantHowto.textContent = plantData.howto;
+                        plantDetailsDiv.style.opacity = '1';
+                    }, 200);
+                } else {
+                    currentPlantKey = null;
+                    plantDetailsDiv.style.opacity = '0';
+                }
+            }
+
+            function resetCamera() {
+                isCameraAnimating = true;
+                targetPosition.copy(DEFAULT_CAMERA_POS);
+                targetLookAt.set(0, 0, 0);
+                isZoomedIn = false;
+                zoomInButton.disabled = false;
+                zoomOutButton.disabled = true;
+                setTimeout(() => { isCameraAnimating = false; }, 1000);
+            }
+
+            function focusOnPlant(plantObject) {
+                isCameraAnimating = true;
+                zoomInButton.disabled = true;
+                zoomOutButton.disabled = false;
+                const plantPosition = new THREE.Vector3();
+                plantObject.getWorldPosition(plantPosition);
+
+                targetPosition.x = plantPosition.x + 3;
+                targetPosition.y = plantPosition.y + 2;
+                targetPosition.z = plantPosition.z + 3;
+                targetLookAt.copy(plantPosition);
+
+                setTimeout(() => { isCameraAnimating = false; }, 1000);
+            }
+
+            function onWindowResize() {
+                const container = document.getElementById('garden-canvas-container');
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+
+            function onMouseMove(event) {
+                const container = document.getElementById('garden-canvas-container');
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(plantObjects, true);
+
+                if (intersects.length > 0) {
+                    let nearestObject = intersects[0].object;
+                    while(nearestObject.parent && !nearestObject.userData.id) {
+                        nearestObject = nearestObject.parent;
+                    }
+
+                    if (INTERSECTED != nearestObject) {
+                        if (INTERSECTED) {
+                             INTERSECTED.traverse(child => {
+                                 if(child.isMesh) child.material.emissive.setHex(0x000000);
+                             });
+                        }
+                        INTERSECTED = nearestObject;
+                        INTERSECTED.traverse(child => {
+                            if(child.isMesh) child.material.emissive.setHex(0x555555);
+                        });
+
+                        const plantData = INTERSECTED.userData;
+                        plantHoverName.textContent = plantData.name;
+                        const bgColor = plantData.color.toString(16).padStart(6, '0');
+                        plantHoverImage.src = `https://placehold.co/150x150/${bgColor}/ffffff?text=${encodeURIComponent(plantData.name)}`;
+                        
+                        const vector = new THREE.Vector3();
+                        INTERSECTED.getWorldPosition(vector);
+                        vector.project(camera);
+                        
+                        const x = (vector.x * 0.5 + 0.5) * container.clientWidth;
+                        const y = (vector.y * -0.5 + 0.5) * container.clientHeight;
+                        
+                        plantHoverCard.style.left = `${x}px`;
+                        plantHoverCard.style.top = `${y}px`;
+                        plantHoverCard.classList.add('visible');
+
+                    }
+                } else {
+                    if (INTERSECTED) {
+                        INTERSECTED.traverse(child => {
+                           if(child.isMesh) child.material.emissive.setHex(0x000000);
+                        });
+                        INTERSECTED = null;
+                    }
+                    plantHoverCard.classList.remove('visible');
+                }
+            }
+
+            function onMouseClick(event) {
+                if(INTERSECTED) {
+                    focusOnPlant(INTERSECTED);
+                    updatePlantDetails(INTERSECTED.userData);
+                }
+            }
+            
+            function animate() {
+                requestAnimationFrame(animate);
+
+                if(isCameraAnimating) {
+                    camera.position.lerp(targetPosition, 0.05);
+                    camera.lookAt(targetLookAt);
+                }
+
+                renderer.render(scene, camera);
+            }
+            
+            function showView(viewId) {
+                const allViews = [welcomePage, atlasView, gardenView];
+                allViews.forEach(view => {
+                    if (view.id === viewId) {
+                        view.classList.remove('hidden');
+                        setTimeout(() => {
+                            view.style.position = 'relative';
+                            view.style.pointerEvents = 'auto';
+                        }, 500);
+                    } else {
+                        view.classList.add('hidden');
+                        view.style.position = 'absolute';
+                        view.style.pointerEvents = 'none';
+                    }
+                });
+            }
+            
+            startButton.addEventListener('click', () => {
+                showView('atlas-view');
+            });
+
+            bodyParts.forEach(part => {
+                part.addEventListener('mouseenter', (e) => {
+                    tooltip.textContent = e.target.getAttribute('title');
+                    tooltip.style.opacity = '1';
+                });
+                part.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = `${e.clientX + 15}px`;
+                    tooltip.style.top = `${e.clientY + 15}px`;
+                });
+                part.addEventListener('mouseleave', () => {
+                    tooltip.style.opacity = '0';
+                });
+                part.addEventListener('click', (e) => {
+                    const gardenKey = e.target.dataset.garden;
+                    if (gardenKey) {
+                        showView('garden-view');
+                        loadGarden(gardenKey);
+                        onWindowResize();
+                    }
+                });
+            });
+
+            backButton.addEventListener('click', () => {
+                showView('atlas-view');
+                resetCamera();
+            });
+
+            zoomInButton.addEventListener('click', () => {
+                isCameraAnimating = true;
+                targetPosition.copy(ZOOMED_CAMERA_POS);
+                targetLookAt.set(0, 0, 0);
+                isZoomedIn = true;
+                zoomInButton.disabled = true;
+                zoomOutButton.disabled = false;
+                setTimeout(() => { isCameraAnimating = false; }, 1000);
+            });
+
+            zoomOutButton.addEventListener('click', () => {
+                isCameraAnimating = true;
+                targetPosition.copy(DEFAULT_CAMERA_POS);
+                targetLookAt.set(0, 0, 0);
+                isZoomedIn = false;
+                zoomInButton.disabled = false;
+                zoomOutButton.disabled = true;
+                setTimeout(() => { isCameraAnimating = false; }, 1000);
+            });
+
+            exploreMoreButton.addEventListener('click', () => {
+                if (moreDetailsContainer.classList.contains('hidden')) {
+                    const plantData = atlasData[currentGardenKey].plants[currentPlantKey];
+                    if (plantData && plantData.moreBenefitsAndRecipe) {
+                        moreBenefitsList.innerHTML = plantData.moreBenefitsAndRecipe.benefits.map(b => `<li>${b}</li>`).join('');
+                        plantRecipe.textContent = plantData.moreBenefitsAndRecipe.recipe.instructions;
+                        moreDetailsContainer.classList.remove('hidden');
+                    }
+                } else {
+                    moreDetailsContainer.classList.add('hidden');
+                }
+            });
+
+            initThree();
+            showView('welcome-page');
+        });
+    </script>
+</body>
+</html>
